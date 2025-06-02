@@ -1,9 +1,3 @@
-variable "create_models_bucket" {
-  description = "Whether to create the models S3 bucket if it doesn't exist"
-  type        = bool
-  default     = true
-} 
-
 variable "region" {
   description = "AWS region to deploy resources"
   type        = string

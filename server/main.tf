@@ -38,7 +38,6 @@ resource "aws_iam_role_policy_attachment" "lambda_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-
 # IAM policy for S3 access
 resource "aws_iam_role_policy" "lambda_s3_policy" {
   name = "${var.project_name}-${var.environment}-lambda-s3-policy"
@@ -67,7 +66,6 @@ resource "aws_iam_role_policy" "lambda_s3_policy" {
   })
 }
 
-
 # --- HTTP API (v2) Gateway ---
 resource "aws_apigatewayv2_api" "model_loader_api" {
   name          = "${var.project_name}-${var.environment}-api"
@@ -92,6 +90,7 @@ resource "aws_apigatewayv2_route" "get_model" {
   api_id    = aws_apigatewayv2_api.model_loader_api.id
   route_key = "GET /3d-model/{id}"
   target    = "integrations/${aws_apigatewayv2_integration.get_model.id}"
+  authorization_type = "NONE"
 }
 
 resource "aws_apigatewayv2_integration" "get_model" {
@@ -118,7 +117,8 @@ resource "aws_lambda_function" "model_loader_util" {
 
   environment {
     variables = {
-      s3_bucket      = var.model_s3_bucket
+      model_s3_bucket = var.model_s3_bucket
+      api_key_value = var.api_key_value
     }
   }
 
