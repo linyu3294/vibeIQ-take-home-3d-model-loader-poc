@@ -100,10 +100,10 @@ resource "aws_apigatewayv2_integration" "get_model" {
 }
 
 ###########################################
-# Gallery Lambda Resources
+# Model Loader Lambda Resources
 ###########################################
 
-# Gallery Lambda function
+# Model Loader Lambda function
 resource "aws_lambda_function" "model_loader_util" {
   function_name = "${var.project_name}-${var.environment}-model-loader-util"
   role          = aws_iam_role.lambda_exec.arn

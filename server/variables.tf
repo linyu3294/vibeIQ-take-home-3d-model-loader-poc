@@ -28,7 +28,7 @@ variable "client_domain" {
 }
 
 variable "model_s3_bucket" {
-  description = "S3 bucket for gallery images"
+  description = "S3 bucket for Model files (GLB files)"
   type        = string
 }
 
