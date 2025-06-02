@@ -22,10 +22,25 @@ go.work
 terraform.tfvars
 *.tfvars
 
-# MISC
+MISC
 .DS_Store
 .vscode
 *.zip
 main
 bootstrap
+
+# Client environment files
+.env
+.env.*
+client/.env
+client/.env.*
+
+# TypeScript
+*.js.map
+*.d.ts
+client/dist/
+client/node_modules/
+client/.vite/
+client/coverage/
+client/.DS_Store
 
