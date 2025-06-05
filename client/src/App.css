@@ -1,0 +1,169 @@
+#root {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.gallery {
+  padding: 1rem;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.cards-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem;
+  justify-content: flex-start;
+}
+
+.card {
+  flex: 0 1 300px;
+  min-width: 250px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  padding: 1rem;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s, box-shadow 0.2s;
+  background: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.card-content {
+  text-align: center;
+  margin-top: auto;
+  padding-top: 3rem;
+}
+
+.card-content h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.2rem;
+}
+
+.card-content p {
+  margin: 0;
+  color: #666;
+}
+
+.card-image {
+  width: 100%;
+  height: 400px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+@media (max-width: 480px) {
+  .cards-grid {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .card {
+    width: 100%;
+    max-width: 300px;
+  }
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 3rem;
+  margin-bottom: 2rem;
+  gap: 1rem;
+}
+
+.pagination-link {
+  font-size: 1.1rem;
+  text-decoration: none;
+  color: #666;
+  transition: color 0.2s;
+  padding: 0.5rem;
+}
+
+.pagination-link:hover {
+  color: #646cff;
+}
+
+.gallery-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem;
+  justify-content: flex-start;
+}
+
+.upload-button {
+  background-color: white;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.upload-button:hover {
+  border-color: #999;
+}
+
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.dialog {
+  background: white;
+  padding: 2rem;
+  border-radius: 5px;
+  position: relative;
+  min-width: 400px;
+}
+
+.dialog-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #666;
+  padding: 0.5rem;
+  line-height: 1;
+}
+
+.dialog-close:hover {
+  color: #333;
+}
+
+.dialog-content {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dialog-content input[type="file"] {
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
