@@ -12,6 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	"vibeIQ-take-home-3d-model-loader-poc/lambda/helpers"
 )
 
 type ErrorResponse struct {
@@ -23,7 +25,7 @@ type SuccessResponse struct {
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	if resp, err := validateAPIKey(req); err != nil || resp.StatusCode != 0 {
+	if resp, err := helpers.ValidateHttpAPIKey(req); err != nil || resp.StatusCode != 0 {
 		return resp, err
 	}
 
@@ -74,29 +76,6 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		},
 		Body: string(body),
 	}, nil
-}
-
-func validateAPIKey(req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	apiKey := req.Headers["x-api-key"]
-	if apiKey == "" {
-		errorResp := ErrorResponse{Error: "API key is required"}
-		body, _ := json.Marshal(errorResp)
-		return events.APIGatewayV2HTTPResponse{
-			StatusCode: 401,
-			Body:       string(body),
-		}, nil
-	}
-
-	if apiKey != os.Getenv("api_key_value") {
-		errorResp := ErrorResponse{Error: "Invalid API key"}
-		body, _ := json.Marshal(errorResp)
-		return events.APIGatewayV2HTTPResponse{
-			StatusCode: 403,
-			Body:       string(body),
-		}, nil
-	}
-
-	return events.APIGatewayV2HTTPResponse{}, nil
 }
 
 func main() {

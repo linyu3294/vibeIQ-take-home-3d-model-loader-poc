@@ -89,3 +89,44 @@ This will remove:
 - Associated triggers
 
 Note: The S3 bucket must be manually deleted from the AWS Console.
+
+## Testing WebSocket Connections
+
+The application uses WebSocket connections for real-time updates. Here's how to test the WebSocket functionality:
+
+### Prerequisites for WebSocket Testing
+
+1. Deploy the application to AWS
+2. Note down your API Gateway WebSocket URL (format: `wss://xxxxx.execute-api.region.amazonaws.com/stage`)
+3. Ensure the following environment variables are set in your Lambda functions:
+   - `api_key_value`: Your API key for authentication
+   - `CONNECTIONS_TABLE`: Your DynamoDB table name for storing connections
+
+### Testing Steps
+
+1. **Install WebSocket Client**
+   ```bash
+   npm install -g wscat
+   ```
+
+2. **Connect to WebSocket**
+   ```bash
+   wscat -c "wss://your-api-gateway-url.execute-api.region.amazonaws.com/stage?apiKey=your-api-key"
+   ```
+
+3. **Verify Connection in DynamoDB**
+   - Go to AWS Console → DynamoDB
+   - Select your connections table
+   - You should see a new item with the connection ID
+   - The item should be removed when you disconnect
+
+4. **Test Disconnection**
+   - Press Ctrl+C in the wscat terminal to disconnect
+   - Verify in DynamoDB that the connection record is removed
+
+### Expected Behavior
+
+- Successful connection: You'll see a connection established message
+- Invalid API key: Connection will be rejected with a 403 error
+- Missing API key: Connection will be rejected with a 401 error
+- After disconnection: The connection record should be removed from DynamoDB

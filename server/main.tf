@@ -14,8 +14,6 @@ data "aws_caller_identity" "current" {}
 ###########################################
 # Shared AWS Resources
 ###########################################
-
-# IAM role and policies
 resource "aws_iam_role" "lambda_exec" {
   name = "${var.project_name}-${var.environment}-lambda-exec-role"
 
@@ -38,7 +36,9 @@ resource "aws_iam_role_policy_attachment" "lambda_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# IAM policy for S3 access
+###########################################
+# Model Loader S3 Resources
+###########################################
 resource "aws_iam_role_policy" "lambda_s3_policy" {
   name = "${var.project_name}-${var.environment}-lambda-s3-policy"
   role = aws_iam_role.lambda_exec.id
@@ -66,7 +66,9 @@ resource "aws_iam_role_policy" "lambda_s3_policy" {
   })
 }
 
-# --- HTTP API (v2) Gateway ---
+###########################################
+# Model Loader HTTP API Gateway Resources
+###########################################
 resource "aws_apigatewayv2_api" "model_loader_api" {
   name          = "${var.project_name}-${var.environment}-api"
   protocol_type = "HTTP"
@@ -85,7 +87,6 @@ resource "aws_apigatewayv2_stage" "model_loader_api_stage" {
   auto_deploy = true
 }
 
-# --- Lambda Integrations and Routes ---
 resource "aws_apigatewayv2_route" "get_model" {
   api_id    = aws_apigatewayv2_api.model_loader_api.id
   route_key = "GET /3d-model/{id}"
@@ -102,8 +103,6 @@ resource "aws_apigatewayv2_integration" "get_model" {
 ###########################################
 # Model Loader Lambda Resources
 ###########################################
-
-# Model Loader Lambda function
 resource "aws_lambda_function" "model_loader_util" {
   function_name = "${var.project_name}-${var.environment}-model-loader-util"
   role          = aws_iam_role.lambda_exec.arn
@@ -131,4 +130,189 @@ resource "aws_lambda_permission" "model_loader_api_gw" {
   function_name = aws_lambda_function.model_loader_util.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.model_loader_api.execution_arn}/*/*"
+}
+
+###########################################
+# AWS API Gateway WebSocket Resources
+###########################################
+resource "aws_apigatewayv2_api" "websocket_api" {
+  name          = "${var.project_name}-${var.environment}-websocket-api"
+  protocol_type = "WEBSOCKET"
+  route_selection_expression = "$request.body.action"
+}
+
+resource "aws_apigatewayv2_stage" "websocket_api_stage" {
+  api_id      = aws_apigatewayv2_api.websocket_api.id
+  name        = "prod"
+  auto_deploy = true
+}
+
+
+###########################################
+# AWS API Gateway WebSocket Integration Resources
+###########################################
+
+resource "aws_apigatewayv2_integration" "websocket_default" {
+  api_id           = aws_apigatewayv2_api.websocket_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.websocket_default.invoke_arn
+}
+
+resource "aws_apigatewayv2_integration" "websocket_connect" {
+  api_id           = aws_apigatewayv2_api.websocket_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.websocket_connect.invoke_arn
+}
+
+resource "aws_apigatewayv2_integration" "websocket_disconnect" {
+  api_id           = aws_apigatewayv2_api.websocket_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.websocket_disconnect.invoke_arn
+}
+
+###########################################
+# AWS API Gateway WebSocket Routes Resources
+###########################################
+
+resource "aws_apigatewayv2_route" "websocket_connect_route" {
+  api_id    = aws_apigatewayv2_api.websocket_api.id
+  route_key = "$connect"
+  target    = "integrations/${aws_apigatewayv2_integration.websocket_connect.id}"
+}
+
+resource "aws_apigatewayv2_route" "websocket_disconnect_route" {
+  api_id    = aws_apigatewayv2_api.websocket_api.id
+  route_key = "$disconnect"
+  target    = "integrations/${aws_apigatewayv2_integration.websocket_disconnect.id}"
+}
+
+resource "aws_apigatewayv2_route" "websocket_default_route" {
+  api_id    = aws_apigatewayv2_api.websocket_api.id
+  route_key = "$default"
+  target    = "integrations/${aws_apigatewayv2_integration.websocket_default.id}"
+}
+
+
+###########################################
+# AWS API Gateway WebSocket Management DynamoDB Resources
+###########################################
+resource "aws_dynamodb_table" "websocket_connections" {
+  name         = "${var.project_name}-${var.environment}-websocket-connections"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "connectionId"
+
+  attribute {
+    name = "connectionId"
+    type = "S"
+  }
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "connect_lambda_dynamodb" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = aws_iam_policy.dynamodb_access.arn
+}
+
+
+resource "aws_iam_policy" "dynamodb_access" {
+  name        = "${var.project_name}-${var.environment}-dynamodb-access"
+  description = "Allow Lambda to access DynamoDB for WebSocket connection management."
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem"
+        ],
+        Resource = aws_dynamodb_table.websocket_connections.arn
+      }
+    ]
+  })
+}
+
+###########################################
+# AWS API Gateway WebSocket Permission Resources
+###########################################
+resource "aws_lambda_permission" "websocket_connect_permission" {
+  statement_id  = "AllowExecutionFromAPIGatewayConnect"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.websocket_connect.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.websocket_api.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "websocket_disconnect_permission" {
+  statement_id  = "AllowExecutionFromAPIGatewayDisconnect"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.websocket_disconnect.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.websocket_api.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "websocket_default_permission" {
+  statement_id  = "AllowExecutionFromAPIGatewayDefault"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.websocket_default.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.websocket_api.execution_arn}/*/*"
+}
+
+###########################################
+# AWS API Gateway WebSocket Management Lambda Resources
+###########################################
+resource "aws_lambda_function" "websocket_default" {
+  function_name = "${var.project_name}-${var.environment}-websocket-default"
+  role          = aws_iam_role.lambda_exec.arn
+  handler       = "bootstrap"
+  runtime       = "provided.al2"
+  filename      = "${path.module}/lambda/websocket-default/websocket-default.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda/websocket-default/websocket-default.zip")
+
+  environment {
+    variables = {
+      # Add any needed environment variables here
+    }
+  }
+
+  tags = local.tags
+}
+
+resource "aws_lambda_function" "websocket_connect" {
+  function_name = "${var.project_name}-${var.environment}-websocket-connect"
+  role          = aws_iam_role.lambda_exec.arn
+  handler       = "bootstrap"
+  runtime       = "provided.al2"
+  filename      = "${path.module}/lambda/websocket-connect/websocket-connect.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda/websocket-connect/websocket-connect.zip")
+
+  environment {
+    variables = {
+      CONNECTIONS_TABLE = aws_dynamodb_table.websocket_connections.name
+      api_key_value = var.api_key_value
+    }
+  }
+
+  tags = local.tags
+}
+
+resource "aws_lambda_function" "websocket_disconnect" {
+  function_name = "${var.project_name}-${var.environment}-websocket-disconnect"
+  role          = aws_iam_role.lambda_exec.arn
+  handler       = "bootstrap"
+  runtime       = "provided.al2"
+  filename      = "${path.module}/lambda/websocket-disconnect/websocket-disconnect.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda/websocket-disconnect/websocket-disconnect.zip")
+
+  environment {
+    variables = {
+      CONNECTIONS_TABLE = aws_dynamodb_table.websocket_connections.name
+      api_key_value = var.api_key_value
+    }
+  }
+
+  tags = local.tags
 }
