@@ -158,7 +158,7 @@ This project provisions infrastructure to run Blender in headless mode on AWS EC
    ```bash
    cd server/fargate/blender
    docker build --platform=linux/amd64 -t blender-headless .
-   docker run --rm blender-headless --version  # Test the build
+   docker run --platform=linux/amd64 --rm blender-headless --version
    ```
 
 3. **Push to Amazon ECR:**
@@ -186,6 +186,10 @@ This project provisions infrastructure to run Blender in headless mode on AWS EC
    - Create the ECR repo (if not exists):
      ```bash
      aws ecr create-repository --repository-name blender-headless
+     ```
+   - Prune previous images if there are any leftovers
+     ```
+     aws ecr delete-repository --repository-name blender-headless --force
      ```
    - Tag and push:
      ```bash
