@@ -412,7 +412,7 @@ resource "aws_ecs_task_definition" "blender" {
   container_definitions = jsonencode([
     {
       name      = "blender"
-      image     = "058739924845.dkr.ecr.us-east-1.amazonaws.com/blender-headless:latest"
+      image     = var.blender_ecr_image
       essential = true
       command = ["--background", "--python-expr", "print('Hello from Blender!')"]
       logConfiguration = {
