@@ -42,3 +42,8 @@ variable "allowed_origins" {
   description = "List of allowed origins for CORS"
   type        = list(string)
 }
+
+variable "blender_ecr_image" {
+  description = "ECR image URI for the Blender container"
+  type        = string
+}

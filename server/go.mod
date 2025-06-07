@@ -5,6 +5,7 @@ go 1.22.0
 require (
 	github.com/aws/aws-lambda-go v1.49.0
 	github.com/aws/aws-sdk-go-v2/config v1.29.14
+	github.com/aws/aws-sdk-go-v2/service/sqs v1.31.2
 )
 
 require (
