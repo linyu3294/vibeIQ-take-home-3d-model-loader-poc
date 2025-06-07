@@ -40,6 +40,15 @@ echo "Creating zip file for websocket-default.go function..."
 GOOS=linux GOARCH=amd64 go build -o bootstrap websocket-default.go
 zip ./websocket-default.zip bootstrap
 
+cd ../
+
+# Build notification function
+echo "Building notification function..."
+cd ./notification
+echo "Creating zip file for notification.go function..."
+GOOS=linux GOARCH=amd64 go build -o bootstrap notification.go
+zip ./notification.zip bootstrap
+
 cd ../../
 
 # Deploy to AWS

@@ -9,3 +9,5 @@ api_key_value = "generate-a-secret-and-add-here"
 allowed_origins = [
   "http://localhost:0000"
 ]
+// First build a docker image and add to ECR. See instructions in the ./server/README.md
+blender_ecr_image = "url-of-the-docker-image-containing-a-blender-engine-running-in-linux"
