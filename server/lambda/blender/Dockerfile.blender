@@ -1,0 +1,87 @@
+FROM public.ecr.aws/lambda/python:3.9
+
+# Install system dependencies
+RUN yum update -y && \
+    yum install -y \
+    mesa-libGL \
+    mesa-libGLU \
+    libX11 \
+    libXext \
+    libXi \
+    libXrender \
+    libXt \
+    libXtst \
+    libXrandr \
+    libXinerama \
+    libXcursor \
+    libXcomposite \
+    libXdamage \
+    libXfixes \
+    libXxf86vm \
+    libXv \
+    libXvMC \
+    libXxf86dga \
+    libXxf86misc \
+    libXss \
+    libXres \
+    libXp \
+    libXpm \
+    libXmu \
+    libXft \
+    libXfont \
+    libXdmcp \
+    libXau \
+    libX11-xcb \
+    libxcb \
+    libxcb-dri2 \
+    libxcb-dri3 \
+    libxcb-glx \
+    libxcb-present \
+    libxcb-randr \
+    libxcb-render \
+    libxcb-shape \
+    libxcb-sync \
+    libxcb-xfixes \
+    libxcb-xinerama \
+    libxcb-xkb \
+    libxcb-xrm \
+    libxcb-xtest \
+    libxcb-xv \
+    libxcb-xvmc \
+    libxcb-icccm4 \
+    libxcb-image0 \
+    libxcb-keysyms1 \
+    libxcb-randr0 \
+    libxcb-render-util0 \
+    libxcb-shape0 \
+    libxcb-sync1 \
+    libxcb-util1 \
+    libxcb-xinerama0 \
+    libxcb-xkb1 \
+    libxcb-xrm0 \
+    libxcb-xtest0 \
+    libxcb-xv0 \
+    libxcb-xvmc0 \
+    libxcb-xvmc0 \
+    tar \
+    xz \
+    && yum clean all
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Download and install Blender
+RUN curl -L https://ftp.nluug.nl/pub/graphics/blender/release/Blender3.6/blender-3.6.0-linux-x64.tar.xz -o blender.tar.xz && \
+    tar xf blender.tar.xz && \
+    mv blender-3.6.0-linux-x64 /opt/blender && \
+    rm blender.tar.xz
+
+# Add Blender to PATH
+ENV PATH="/opt/blender:${PATH}"
+
+# Copy handler script
+COPY handler.py ${LAMBDA_TASK_ROOT}
+
+# Set the CMD to your handler
+CMD [ "handler.handler" ] 

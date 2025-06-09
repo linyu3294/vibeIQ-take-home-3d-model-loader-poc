@@ -1,6 +1,7 @@
 
 ## Server Setup
 
+
 ### AWS Configuration
 
 #### 1. Configure AWS CLI
@@ -22,12 +23,89 @@ aws_access_key_id = your-secret-id
 aws_secret_access_key = your-secret-access-key
 ```
 
+### Build and Push Blender Docker Image to ECR
+
+1. **Prepare the Dockerfile**
+   - See `server/lambda/blender/Dockerfile.blender` for a headless Blender build
+
+2. **Login to ECR and check for existing images for blender-headless repository (Skip if first time building)**
+2. **Build the Docker Image (on Mac M1/M2, target linux/amd64):**
+   ```bash
+   cd server/lambda/blender/
+   docker build --platform=linux/amd64 --no-cache -t blender-headless:v{new-version-number} -f Dockerfile.blender .
+   docker run --platform=linux/amd64 -t blender-headless -f Dockerfile.blender .
+   ```
+
+3. **Push to Amazon ECR:**
+   - Set up AWS CLI environment variables to login to ECR:
+     ```bash
+     aws_account_id=$(aws sts get-caller-identity --query Account --output text)
+     region=us-east-1
+     etc ...
+     ```
+   - OR If you don't want to set the env variables mannually, set it up in your local config in ~/.aws and then run this cmd to verify your credentials are set up in your local config in ~/.aws:
+     ```bash
+     > AWS sts get-caller-identity
+      {
+         "UserId": ... your user id will be shown here,
+         "Account": ... your IAM account number,
+         "Arn": ... your arn will be shown here
+      }
+     ```
+   - The previous step will display the IAM user account number
+
+   - Log in to AWS ECR:
+     ```bash
+      aws ecr get-login-password | docker login --username AWS --password-stdin {replace-with-your-IAM-account-number}.dkr.ecr.us-east-1.amazonaws.com
+     ```
+
+   - Create the ECR repo (if not exists):
+     ```bash
+     aws ecr create-repository --repository-name blender-headless
+     ```
+   - Tag and push:
+     ```bash
+     docker tag blender-headless:v{new-version-number} {replace-with-the-newly-created-repository-uri}:v{new-version-number}
+     docker push {replace-with-the-newly-created-repository-uri}:v{new-version-number}
+
+4. **If not the first time pushing to the ECR repo, do this**
+
+   - Once pushed, generate a new uri for the image with the latest version tag
+   - Copy and paste the new url to the terraform.tfvars
+   - Update the environmnet variable with the new terraform.tfvars by going to the server root directory and run the following:
+   ```
+      cd server/
+      sh ./build.sh
+   ```
+
+#### Once the image has been pushed an ECR URI has been created, put that path in the environemnt variables in ```terraform.tfvars```. This file will be gitignored, only used for building the infrastructure.
+
 ### Infrastructure Setup
 
 #### S3 Bucket Setup
 
 1. Create a generic S3 bucket in AWS Console:
    - Use default configurations
+   - Copy the following permission into the AWS S3 config via the AWS console. Set it up within the Cross-origin resource sharing (CORS) permission section.
+   ```
+      [
+         {
+            "AllowedHeaders": [
+                  "*"
+            ],
+            "AllowedMethods": [
+                  "GET"
+            ],
+            "AllowedOrigins": [
+                  "http://localhost:5173"
+            ],
+            "ExposeHeaders": [
+                  "ETag"
+            ],
+            "MaxAgeSeconds": 3000
+         }
+      ]
+   ```
    - Note down the bucket name for later use
 
 #### Terraform Configuration
@@ -90,11 +168,11 @@ This will remove:
 
 Note: The S3 bucket must be manually deleted from the AWS Console.
 
-## Testing WebSocket Connections
+### Testing WebSocket Connections
 
 The application uses WebSocket connections for real-time updates. Here's how to test the WebSocket functionality:
 
-### Prerequisites for WebSocket Testing
+#### Prerequisites for WebSocket Testing
 
 1. Deploy the application to AWS
 2. Note down your API Gateway WebSocket URL (format: `wss://xxxxx.execute-api.region.amazonaws.com/stage`)
@@ -102,7 +180,7 @@ The application uses WebSocket connections for real-time updates. Here's how to 
    - `api_key_value`: Your API key for authentication
    - `CONNECTIONS_TABLE`: Your DynamoDB table name for storing connections
 
-### Testing Steps
+#### Testing Steps
 
 1. **Install WebSocket Client**
    ```bash
@@ -124,70 +202,9 @@ The application uses WebSocket connections for real-time updates. Here's how to 
    - Press Ctrl+C in the wscat terminal to disconnect
    - Verify in DynamoDB that the connection record is removed
 
-### Expected Behavior
+#### Expected Behavior
 
 - Successful connection: You'll see a connection established message
 - Invalid API key: Connection will be rejected with a 403 error
 - Missing API key: Connection will be rejected with a 401 error
 - After disconnection: The connection record should be removed from DynamoDB
-
-## Blender Headless Services on ECS Fargate
-
-### Architectural Intention
-
-This project provisions infrastructure to run Blender in headless mode on AWS ECS Fargate. The goal is to enable automated, scalable, and serverless, .blend file management/export, 3D rendering or batch processing jobs using Blender, without managing any EC2 servers.
-
-**Why this architecture?**
-- **ECS Fargate**: Runs containers without managing servers. Perfect for on-demand, scalable rendering jobs.
-- **VPC, Subnet, Security Group**: Required by AWS to securely network and expose your Fargate tasks (e.g., for VNC or web UI access, or for S3/EFS integration).
-- **Docker Image**: Blender is packaged in a Docker image for portability and reproducibility. The image is built for linux/amd64 to ensure compatibility with Fargate.
-- **ECR (Elastic Container Registry)**: Stores your custom Blender Docker image for use by ECS.
-
-### Typical Use Cases
-- Automated rendering of .blend files (e.g., via API or batch jobs)
-- Headless 3D processing or conversion
-- Integration with web or serverless workflows
-
-### Build and Push Blender Docker Image
-
-1. **Prepare the Dockerfile**
-   - See `server/fargate/blender/Dockerfile` for a headless Blender build (no GUI, CLI only).
-   - Make sure it includes `xz-utils` for extracting Blender tarballs.
-
-2. **Build the Docker Image (on Mac M1/M2, target linux/amd64):**
-   ```bash
-   cd server/fargate/blender
-   docker build --platform=linux/amd64 -t blender-headless .
-   docker run --rm blender-headless --version  # Test the build
-   ```
-
-3. **Push to Amazon ECR:**
-   - Set up AWS CLI environment variables to login to ECR:
-     ```bash
-     aws_account_id=$(aws sts get-caller-identity --query Account --output text)
-     region=us-east-1
-     etc ...
-     ```
-   - OR run this cmd to verify your credentials are set up in your local config in ~/.aws:
-     ```bash
-     > AWS sts get-caller-identity
-      {
-         "UserId": ... your user id will be shown here,
-         "Account": ... your IAM account number,
-         "Arn": ... your arn will be shown here
-      }
-     ```
-   - The previous step will display the IAM user account number
-
-   - Log in to AWS ECR:
-     ```bash
-      aws ecr get-login-password | docker login --username AWS --password-stdin {replace-with-your-IAM-account-number}.dkr.ecr.us-east-1.amazonaws.com
-     ```
-   - Create the ECR repo (if not exists):
-     ```bash
-     aws ecr create-repository --repository-name blender-headless
-     ```
-   - Tag and push:
-     ```bash
-     docker tag blender-headless:latest {replace-with-the-newly-created-repository-uri}
-     docker push {replace-with-the-newly-created-repository-uri}:latest
