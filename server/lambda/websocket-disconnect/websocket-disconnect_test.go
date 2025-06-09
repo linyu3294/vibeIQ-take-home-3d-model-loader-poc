@@ -102,7 +102,7 @@ func TestHandleDisconnect_MissingTable(t *testing.T) {
 	resp, err := HandleDisconnect(context.Background(), req, mockDynamo, "")
 	assert.NoError(t, err)
 	assert.Equal(t, 500, resp.StatusCode)
-	assert.Equal(t, "CONNECTIONS_TABLE not set", resp.Body)
+	assert.Equal(t, "connections_table not set", resp.Body)
 }
 
 func TestHandleDisconnect_DynamoError(t *testing.T) {

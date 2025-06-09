@@ -178,7 +178,7 @@ The application uses WebSocket connections for real-time updates. Here's how to 
 2. Note down your API Gateway WebSocket URL (format: `wss://xxxxx.execute-api.region.amazonaws.com/stage`)
 3. Ensure the following environment variables are set in your Lambda functions:
    - `api_key_value`: Your API key for authentication
-   - `CONNECTIONS_TABLE`: Your DynamoDB table name for storing connections
+   - `connections_table`: Your DynamoDB table name for storing connections
 
 #### Testing Steps
 

@@ -21,7 +21,7 @@ func HandleConnect(ctx context.Context, req events.APIGatewayWebsocketProxyReque
 	}
 
 	if tableName == "" {
-		return events.APIGatewayProxyResponse{StatusCode: 500, Body: "CONNECTIONS_TABLE not set"}, nil
+		return events.APIGatewayProxyResponse{StatusCode: 500, Body: "connections_table not set"}, nil
 	}
 	fmt.Printf("Connect event for connectionId: %s\n", req.RequestContext.ConnectionID)
 	_, err := dynamo.PutItem(&dynamodb.PutItemInput{
@@ -39,7 +39,7 @@ func HandleConnect(ctx context.Context, req events.APIGatewayWebsocketProxyReque
 func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	sess := session.Must(session.NewSession())
 	dynamo := dynamodb.New(sess)
-	tableName := os.Getenv("CONNECTIONS_TABLE")
+	tableName := os.Getenv("connections_table")
 	return HandleConnect(ctx, req, dynamo, tableName)
 }
 

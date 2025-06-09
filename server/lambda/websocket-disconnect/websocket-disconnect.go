@@ -15,7 +15,7 @@ import (
 
 func HandleDisconnect(ctx context.Context, req events.APIGatewayWebsocketProxyRequest, dynamo dynamodbiface.DynamoDBAPI, tableName string) (events.APIGatewayProxyResponse, error) {
 	if tableName == "" {
-		return events.APIGatewayProxyResponse{StatusCode: 500, Body: "CONNECTIONS_TABLE not set"}, nil
+		return events.APIGatewayProxyResponse{StatusCode: 500, Body: "connections_table not set"}, nil
 	}
 	fmt.Printf("Disconnect event for connectionId: %s\n", req.RequestContext.ConnectionID)
 	_, err := dynamo.DeleteItem(&dynamodb.DeleteItemInput{
@@ -33,7 +33,7 @@ func HandleDisconnect(ctx context.Context, req events.APIGatewayWebsocketProxyRe
 func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	sess := session.Must(session.NewSession())
 	dynamo := dynamodb.New(sess)
-	tableName := os.Getenv("CONNECTIONS_TABLE")
+	tableName := os.Getenv("connections_table")
 	return HandleDisconnect(ctx, req, dynamo, tableName)
 }
 

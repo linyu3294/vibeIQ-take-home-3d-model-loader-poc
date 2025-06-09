@@ -320,7 +320,7 @@ resource "aws_lambda_function" "websocket_connect" {
 
   environment {
     variables = {
-      CONNECTIONS_TABLE = aws_dynamodb_table.websocket_connections.name
+      connections_table = aws_dynamodb_table.websocket_connections.name
       api_key_value = var.api_key_value
     }
   }
@@ -338,7 +338,7 @@ resource "aws_lambda_function" "websocket_disconnect" {
 
   environment {
     variables = {
-      CONNECTIONS_TABLE = aws_dynamodb_table.websocket_connections.name
+      connections_table = aws_dynamodb_table.websocket_connections.name
       api_key_value = var.api_key_value
     }
   }
@@ -492,8 +492,8 @@ resource "aws_lambda_function" "notification" {
 
   environment {
     variables = {
-      CONNECTIONS_TABLE = aws_dynamodb_table.websocket_connections.name
-      WEBSOCKET_API_ENDPOINT = "${aws_apigatewayv2_api.websocket_api.api_endpoint}/${aws_apigatewayv2_stage.websocket_api_stage.name}"
+      connections_table = aws_dynamodb_table.websocket_connections.name
+      websocket_api_endpoint = "${aws_apigatewayv2_api.websocket_api.api_endpoint}/${aws_apigatewayv2_stage.websocket_api_stage.name}"
     }
   }
 

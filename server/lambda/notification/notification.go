@@ -33,8 +33,8 @@ func handler(ctx context.Context, sqsEvent events.SQSEvent) error {
 	dynamoClient := dynamodb.NewFromConfig(cfg)
 
 	// Get environment variables
-	connectionsTable := os.Getenv("CONNECTIONS_TABLE")
-	websocketEndpoint := os.Getenv("WEBSOCKET_API_ENDPOINT")
+	connectionsTable := os.Getenv("connections_table")
+	websocketEndpoint := os.Getenv("websocket_api_endpoint")
 
 	// Initialize API Gateway client
 	apiClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {
