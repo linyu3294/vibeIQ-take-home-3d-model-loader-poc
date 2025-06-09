@@ -64,6 +64,40 @@ try:
     elif to_file_type == "obj":
         print(f"Exporting to OBJ: {output_file}")
         bpy.ops.export_scene.obj(filepath=output_file)
+    # if format_type == "glb":
+    #     bpy.ops.export_scene.gltf(
+    #         filepath=output_path,
+    #         export_format='GLB',
+    #         export_texcoords=True,
+    #         export_normals=True,
+    #         export_yup=True
+    #         )
+    # elif format_type == "gltf":
+    #     bpy.ops.export_scene.gltf(
+    #         filepath=output_path,
+    #         export_format='GLTF_SEPARATE',
+    #         export_texcoords=True,
+    #         export_normals=True,
+    #         export_yup=True
+    #     )
+    # elif format_type == "obj":
+    #     bpy.ops.export_scene.obj(
+    #         filepath=output_path,
+    #         use_materials=True
+    #     )
+    # elif format_type == "fbx":
+    #     bpy.ops.export_scene.fbx(
+    #         filepath=output_path,
+    #         use_selection=False,
+    #         apply_unit_scale=True,
+    #         bake_space_transform=True
+    #     )
+    # elif format_type == "usd":
+    #     bpy.ops.wm.usd_export(filepath=output_path)
+    # elif format_type == "usdz":
+    #     # Export as .usd first
+    #     intermediate_usd = output_path.replace(".usdz", ".usd")
+    #     bpy.ops.wm.usd_export(filepath=intermediate_usd)
     else:
         raise ValueError(f"Unsupported output file type: {to_file_type}")
 
