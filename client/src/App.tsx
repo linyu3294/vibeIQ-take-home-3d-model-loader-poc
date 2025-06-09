@@ -52,11 +52,9 @@ function Gallery() {
         ))}
       </div>
       <div className="pagination">
-        <a href="#" className="pagination-link">&lt;&lt;</a>
-        <a href="#" className="pagination-link">1</a>
-        <a href="#" className="pagination-link">2</a>
-        <a href="#" className="pagination-link">3</a>
-        <a href="#" className="pagination-link">&gt;&gt;</a>
+        <a href="#" className="pagination-link">&lt;&lt; Previous | </a>
+        <a href="#" className="pagination-link">Page 1</a>
+        <a href="#" className="pagination-link"> | Next &gt;&gt;</a>
       </div>
       <UploadDialog isOpen={isDialogOpen} onClose={() => setIsDialogOpen(false)} />
     </div>
