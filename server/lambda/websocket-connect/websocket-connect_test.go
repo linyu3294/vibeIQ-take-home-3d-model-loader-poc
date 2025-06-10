@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"os"
 	"testing"
 
@@ -77,14 +78,19 @@ func TestHandleConnect_InvalidAPIKey(t *testing.T) {
 }
 
 func TestHandleConnect_Success(t *testing.T) {
+	os.Setenv("api_key_value", "test-api-key")
 	mockDynamo := &mockDynamoDB{}
 	req := events.APIGatewayWebsocketProxyRequest{
 		RequestContext: events.APIGatewayWebsocketProxyRequestContext{
 			ConnectionID: "test-connection-id",
 		},
+		QueryStringParameters: map[string]string{
+			"apiKey": "test-api-key",
+		},
 	}
 	resp, err := HandleConnect(context.Background(), req, mockDynamo, "test-table")
 	assert.NoError(t, err)
+	log.Printf("resp: %+v\n", resp)
 	assert.Equal(t, 200, resp.StatusCode)
 	assert.Equal(t, "Connected", resp.Body)
 	assert.NotNil(t, mockDynamo.putItemInput)
@@ -93,23 +99,32 @@ func TestHandleConnect_Success(t *testing.T) {
 }
 
 func TestHandleConnect_MissingTable(t *testing.T) {
+	os.Setenv("api_key_value", "test-api-key")
 	mockDynamo := &mockDynamoDB{}
 	req := events.APIGatewayWebsocketProxyRequest{
 		RequestContext: events.APIGatewayWebsocketProxyRequestContext{
 			ConnectionID: "test-connection-id",
 		},
+		QueryStringParameters: map[string]string{
+			"apiKey": "test-api-key",
+		},
 	}
 	resp, err := HandleConnect(context.Background(), req, mockDynamo, "")
 	assert.NoError(t, err)
+	log.Printf("resp: %+v\n", resp)
 	assert.Equal(t, 500, resp.StatusCode)
 	assert.Equal(t, "connections_table not set", resp.Body)
 }
 
 func TestHandleConnect_DynamoError(t *testing.T) {
+	os.Setenv("api_key_value", "test-api-key")
 	mockDynamo := &mockDynamoDB{putItemErr: errors.New("dynamo error")}
 	req := events.APIGatewayWebsocketProxyRequest{
 		RequestContext: events.APIGatewayWebsocketProxyRequestContext{
 			ConnectionID: "test-connection-id",
+		},
+		QueryStringParameters: map[string]string{
+			"apiKey": "test-api-key",
 		},
 	}
 	resp, err := HandleConnect(context.Background(), req, mockDynamo, "test-table")

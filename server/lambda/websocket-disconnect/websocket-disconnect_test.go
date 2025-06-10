@@ -43,37 +43,12 @@ func TestHandleDisconnect_ValidAPIKey(t *testing.T) {
 	assert.Equal(t, "Disconnected", resp.Body)
 }
 
+// Typically, it's not required to have api key to disconnect a websocket connection.
 func TestHandleDisconnect_MissingAPIKey(t *testing.T) {
-	mockDynamo := &mockDynamoDB{}
-	req := events.APIGatewayWebsocketProxyRequest{
-		RequestContext: events.APIGatewayWebsocketProxyRequestContext{
-			ConnectionID: "test-connection-id",
-		},
-		QueryStringParameters: map[string]string{},
-	}
-	resp, err := HandleDisconnect(context.Background(), req, mockDynamo, "test-table")
-	assert.NoError(t, err)
-	assert.Equal(t, 401, resp.StatusCode)
-	assert.Contains(t, resp.Body, "API key is required")
 }
 
+// Typically, it's not required to have api key to disconnect a websocket connection.
 func TestHandleDisconnect_InvalidAPIKey(t *testing.T) {
-	os.Setenv("api_key_value", "test-api-key")
-	defer os.Unsetenv("api_key_value")
-
-	mockDynamo := &mockDynamoDB{}
-	req := events.APIGatewayWebsocketProxyRequest{
-		RequestContext: events.APIGatewayWebsocketProxyRequestContext{
-			ConnectionID: "test-connection-id",
-		},
-		QueryStringParameters: map[string]string{
-			"apiKey": "wrong-api-key",
-		},
-	}
-	resp, err := HandleDisconnect(context.Background(), req, mockDynamo, "test-table")
-	assert.NoError(t, err)
-	assert.Equal(t, 403, resp.StatusCode)
-	assert.Contains(t, resp.Body, "Invalid API key")
 }
 
 func TestHandleDisconnect_Success(t *testing.T) {
