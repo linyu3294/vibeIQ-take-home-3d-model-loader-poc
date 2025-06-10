@@ -52,8 +52,14 @@ zip ./notification.zip bootstrap
 
 cd ../../
 
-# Deploy to AWS
-echo "Deploying to AWS..."
-terraform apply 
+echo "\n\n\n----------------------------------Running tests----------------------------------\n\n\n"
+go test ./...
+if [ $? -ne 0 ]; then
+    echo "Tests failed. Aborting deployment."
+    exit 1
+fi
+echo "\n\n\n---------------------------------------------------------------------------------\n\n\n"
+echo "All tests passed. Deploying to AWS..."
+terraform apply
 
 echo "Build complete! Lambda functions are ready for deployment."
