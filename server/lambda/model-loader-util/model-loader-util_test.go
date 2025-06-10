@@ -432,7 +432,6 @@ func TestHandleGetModelRequest_Success(t *testing.T) {
 	assert.Regexp(t, expectedPattern2, resp2.Body)
 }
 
-
 func TestHandleGetModelRequest_MissingAPIKey_Returns401(t *testing.T) {
 	os.Setenv("api_key_value", "test-api-key")
 	os.Setenv("model_s3_bucket", "test-bucket")
@@ -533,5 +532,6 @@ func TestHandleGetModelRequest_MissingFileType_Returns400(t *testing.T) {
 
 	resp, err := HandleGetModelRequest(context.Background(), req)
 	assert.NoError(t, err)
+	log.Printf("resp: %+v", resp)
 	assert.Equal(t, 400, resp.StatusCode)
 }

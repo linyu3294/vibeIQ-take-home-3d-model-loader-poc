@@ -65,13 +65,12 @@ def handler(event, context):
                 "connectionId": connection_id,
                 "jobType": job_type,
                 "jobId": job_id,
-                "jobStatus": job_status,
                 "fromFileType": from_file_type,
                 "toFileType": to_file_type,
                 "modelId": model_id,
                 "s3Key": s3_key,
                 "newS3Key": new_s3_key,
-                "status": "completed"
+                "jobStatus": "completed"
             }
             send_notification(notification_queue_url, notification)
 
@@ -81,13 +80,12 @@ def handler(event, context):
                 "connectionId": connection_id,
                 "jobType": body.get('jobType') if 'body' in locals() else None,
                 "jobId": body.get('jobId') if 'body' in locals() else None,
-                "jobStatus": body.get('jobStatus') if 'body' in locals() else None,
+                "jobStatus": failure,
                 "fromFileType": body.get('fromFileType') if 'body' in locals() else None,
                 "toFileType": body.get('toFileType') if 'body' in locals() else None,
                 "modelId": body.get('modelId') if 'body' in locals() else None,
                 "s3Key": body.get('s3Key') if 'body' in locals() else None,
                 "newS3Key": new_s3_key if 'new_s3_key' in locals() else None,
-                "status": "failed",
                 "error": str(e)
             }
             send_notification(notification_queue_url, error_notification)
