@@ -207,11 +207,11 @@ func HandlePostRequest(ctx context.Context, request events.APIGatewayV2HTTPReque
 
 /*
 ###########################################
-GET /v1/3d-model/{unique-model-id}?upload={boolean}&fileType={string}
+GET /v1/3d-model/{unique-model-id}?getPresignedUploadURL={boolean}&fileType={string}
 ###########################################
 */
 
-func handleGetRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+func HandleGetModelRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	apiKeyResp, err := helpers.ValidateHttpAPIKey(request)
 	if err != nil {
 		return createErrorResponse(500, "Error validating API key"), err
@@ -234,28 +234,35 @@ func handleGetRequest(ctx context.Context, request events.APIGatewayV2HTTPReques
 	presignClient := s3.NewPresignClient(s3Client)
 	bucket := os.Getenv("model_s3_bucket")
 
-	upload := request.QueryStringParameters["upload"]
-	fromFileType := request.QueryStringParameters["fromFileType"]
+	shouldGetPresignedUploadURL := request.QueryStringParameters["getPresignedUploadURL"]
+	fileType := request.QueryStringParameters["fileType"]
+	if fileType == "" {
+		return createErrorResponse(400, "Malformed request - fileType query parameter is required"), nil
+	}
+	if shouldGetPresignedUploadURL == "true" && fileType != "blend" {
+		return createErrorResponse(400, "Malformed request - fileType query parameter is not supported"), nil
+	}
+	if (shouldGetPresignedUploadURL == "false" || shouldGetPresignedUploadURL == "") && fileType != "glb" {
+		return createErrorResponse(400, "Malformed request - fetching this file type is not supported"), nil
+	}
 
-	if upload == "true" && fromFileType != "" {
-		objectKey := fmt.Sprintf("%s/%s.%s", fromFileType, modelID, fromFileType)
+	objectKey := fmt.Sprintf("%s/%s.%s", fileType, modelID, fileType)
+
+	if shouldGetPresignedUploadURL == "true" {
 		presignedURL, err := presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
 			Bucket: aws.String(bucket),
 			Key:    aws.String(objectKey),
-		}, s3.WithPresignExpires(15*time.Minute))
+		},
+			// Set to 1 minute for getting presigned URL to upload to S3
+			// The presigned URL is used to upload the file to S3 immediately
+			s3.WithPresignExpires(1*time.Minute))
 		if err != nil {
 			return createErrorResponse(500, "Failed to generate presigned PUT URL"), err
 		}
-		resp := map[string]string{"uploadUrl": presignedURL.URL, "s3Key": objectKey}
-		body, _ := json.Marshal(resp)
-		return events.APIGatewayV2HTTPResponse{
-			StatusCode: 200,
-			Headers:    map[string]string{contentTypeHeader: jsonContentType},
-			Body:       string(body),
-		}, nil
+		successResp := SuccessGetResponse{PresignedUrl: presignedURL.URL}
+		return createSuccessResponse(200, successResp), nil
 	}
 
-	objectKey := fmt.Sprintf("converted/%s.glb", modelID)
 	presignedURL, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(objectKey),
@@ -266,8 +273,7 @@ func handleGetRequest(ctx context.Context, request events.APIGatewayV2HTTPReques
 	}
 
 	successResp := SuccessGetResponse{PresignedUrl: presignedURL.URL}
-	body, _ := json.Marshal(successResp)
-	return createSuccessResponse(200, body), nil
+	return createSuccessResponse(200, successResp), nil
 }
 
 func handlePutRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -323,7 +329,10 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 	switch strings.ToUpper(req.RequestContext.HTTP.Method) {
 	case "GET":
-		return handleGetRequest(ctx, req)
+		if strings.HasPrefix(req.RawPath, "/v1/3d-model/") {
+			return HandleGetModelRequest(ctx, req)
+		}
+		return createErrorResponse(404, "Not found"), nil
 	case "POST":
 		cfg, err := config.LoadDefaultConfig(ctx)
 		if err != nil {

@@ -23,7 +23,7 @@ func (m *mockSQSClient) SendMessage(ctx context.Context, params *sqs.SendMessage
 	return &sqs.SendMessageOutput{}, m.sendMessageErr
 }
 
-func TestHandlePostRequest_ValidAPIKey_SuccessQueueJob(t *testing.T) {
+func TestHandlePostRequest_SuccessQueueJob(t *testing.T) {
 	os.Setenv("api_key_value", "test-api-key")
 	os.Setenv("blender_jobs_queue_url", "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue")
 	defer func() {
@@ -390,4 +390,59 @@ func TestHandlePostRequest_SQSError_Returns500(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, 500, resp.StatusCode)
 	assert.Equal(t, "{\"error\":\"Error sending message to queue\"}", resp.Body)
+}
+
+func TestHandleGetModelRequest_Success(t *testing.T) {
+	os.Setenv("api_key_value", "test-api-key")
+	os.Setenv("model_s3_bucket", "test-bucket")
+	defer func() {
+		os.Unsetenv("api_key_value")
+		os.Unsetenv("model_s3_bucket")
+	}()
+
+	req1 := events.APIGatewayV2HTTPRequest{
+		Headers: map[string]string{
+			"x-api-key":    "test-api-key",
+			"Content-Type": "application/json",
+		},
+		PathParameters: map[string]string{
+			"id": "test-model-id",
+		},
+		QueryStringParameters: map[string]string{
+			"fileType":              "blend",
+			"getPresignedUploadURL": "true",
+		},
+	}
+
+	resp1, err1 := HandleGetModelRequest(context.Background(), req1)
+	assert.NoError(t, err1)
+	log.Printf("resp1: %+v", resp1)
+	assert.Equal(t, 200, resp1.StatusCode)
+
+	// Simplified regex to match the essential parts of the presigned URL
+	expectedPattern1 := `^{"presignedUrl":"https://test-bucket\.s3\.us-east-1\.amazonaws\.com/blend/test-model-id\.blend\?.*"}$`
+	assert.Regexp(t, expectedPattern1, resp1.Body)
+
+	req2 := events.APIGatewayV2HTTPRequest{
+		Headers: map[string]string{
+			"x-api-key":    "test-api-key",
+			"Content-Type": "application/json",
+		},
+		PathParameters: map[string]string{
+			"id": "test-model-id",
+		},
+		QueryStringParameters: map[string]string{
+			"fileType":              "glb",
+			"getPresignedUploadURL": "false",
+		},
+	}
+
+	resp2, err2 := HandleGetModelRequest(context.Background(), req2)
+	assert.NoError(t, err2)
+	log.Printf("resp1: %+v", resp2)
+	assert.Equal(t, 200, resp1.StatusCode)
+
+	// Simplified regex to match the essential parts of the presigned URL
+	expectedPattern2 := `^{"presignedUrl":"https://test-bucket\.s3\.us-east-1\.amazonaws\.com/glb/test-model-id\.glb\?.*"}$`
+	assert.Regexp(t, expectedPattern2, resp2.Body)
 }
