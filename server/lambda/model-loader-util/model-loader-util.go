@@ -129,9 +129,7 @@ func handlePostValidations(request events.APIGatewayV2HTTPRequest, job Conversio
 		return resp, nil
 	}
 
-	apiKeyResp, err := helpers.ValidateHttpAPIKey(events.APIGatewayV2HTTPRequest{
-		Headers: request.Headers,
-	})
+	apiKeyResp, err := helpers.ValidateHttpAPIKey(request)
 	if err != nil {
 		return apiKeyResp, err
 	}
@@ -170,9 +168,7 @@ func HandlePostRequest(ctx context.Context, request events.APIGatewayV2HTTPReque
 	if err := json.Unmarshal([]byte(request.Body), &job); err != nil {
 		return createErrorResponse(400, "Invalid request body"), nil
 	}
-	apiKeyResp, err := helpers.ValidateHttpAPIKey(events.APIGatewayV2HTTPRequest{
-		Headers: request.Headers,
-	})
+	apiKeyResp, err := helpers.ValidateHttpAPIKey(request)
 	if err != nil {
 		return createErrorResponse(500, "Error validating API key"), err
 	}
@@ -201,7 +197,8 @@ func HandlePostRequest(ctx context.Context, request events.APIGatewayV2HTTPReque
 		MessageBody: aws.String(string(messageBody)),
 	})
 	if err != nil {
-		return createErrorResponse(500, "Error sending message to queue"), err
+		errorResp := ErrorResponse{Error: "Error sending message to queue"}
+		return createSuccessResponse(500, errorResp), err
 	}
 
 	successResp := SuccessPostResponse{Status: "Job successfully queued"}
@@ -215,9 +212,7 @@ GET /v1/3d-model/{unique-model-id}?upload={boolean}&fileType={string}
 */
 
 func handleGetRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	apiKeyResp, err := helpers.ValidateHttpAPIKey(events.APIGatewayV2HTTPRequest{
-		Headers: request.Headers,
-	})
+	apiKeyResp, err := helpers.ValidateHttpAPIKey(request)
 	if err != nil {
 		return createErrorResponse(500, "Error validating API key"), err
 	}
@@ -227,13 +222,7 @@ func handleGetRequest(ctx context.Context, request events.APIGatewayV2HTTPReques
 
 	modelID, exists := request.PathParameters["id"]
 	if !exists {
-		errorResp := ErrorResponse{Error: "Model ID is required"}
-		body, _ := json.Marshal(errorResp)
-		return events.APIGatewayV2HTTPResponse{
-			StatusCode: 400,
-			Headers:    map[string]string{contentTypeHeader: jsonContentType},
-			Body:       string(body),
-		}, nil
+		return createErrorResponse(400, "Model id is required"), err
 	}
 
 	cfg, err := config.LoadDefaultConfig(ctx)
@@ -278,17 +267,11 @@ func handleGetRequest(ctx context.Context, request events.APIGatewayV2HTTPReques
 
 	successResp := SuccessGetResponse{PresignedUrl: presignedURL.URL}
 	body, _ := json.Marshal(successResp)
-	return events.APIGatewayV2HTTPResponse{
-		StatusCode: 200,
-		Headers:    map[string]string{contentTypeHeader: jsonContentType},
-		Body:       string(body),
-	}, nil
+	return createSuccessResponse(200, body), nil
 }
 
 func handlePutRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	apiKeyResp, err := helpers.ValidateHttpAPIKey(events.APIGatewayV2HTTPRequest{
-		Headers: request.Headers,
-	})
+	apiKeyResp, err := helpers.ValidateHttpAPIKey(request)
 	if err != nil {
 		return createErrorResponse(500, "Error validating API key"), err
 	}
@@ -323,11 +306,7 @@ func handlePutRequest(ctx context.Context, request events.APIGatewayV2HTTPReques
 		return createErrorResponse(500, fmt.Sprintf("Failed to upload to S3: %v", err)), err
 	}
 
-	return events.APIGatewayV2HTTPResponse{
-		StatusCode: 200,
-		Headers:    map[string]string{contentTypeHeader: jsonContentType},
-		Body:       fmt.Sprintf(`{"s3Key": "%s"}`, s3Key),
-	}, nil
+	return createSuccessResponse(200, "File uploaded successfully - "), nil
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayV2HTTPResponse, error) {
