@@ -31,6 +31,7 @@ def handler(event, context):
             to_file_type = body.get('toFileType')
             model_id = body.get('modelId')
             s3_key = body.get('s3Key')
+            connection_id = body.get('connectionId')
 
             cmd = [
                 "blender", "-b", "-P", "script.py", "--",
@@ -61,6 +62,7 @@ def handler(event, context):
             s3.upload_file(output_file, bucket, new_s3_key)
 
             notification = {
+                "connectionId": connection_id,
                 "jobType": job_type,
                 "jobId": job_id,
                 "jobStatus": job_status,
@@ -76,6 +78,7 @@ def handler(event, context):
         except Exception as e:
             logger.error(f"Error processing record: {str(e)}")
             error_notification = {
+                "connectionId": connection_id,
                 "jobType": body.get('jobType') if 'body' in locals() else None,
                 "jobId": body.get('jobId') if 'body' in locals() else None,
                 "jobStatus": body.get('jobStatus') if 'body' in locals() else None,

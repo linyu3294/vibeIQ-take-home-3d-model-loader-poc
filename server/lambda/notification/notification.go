@@ -16,66 +16,75 @@ import (
 )
 
 type NotificationMessage struct {
-	Status      string `json:"status"`
-	ModelID     string `json:"modelId"`
-	OutputS3Key string `json:"outputS3Key,omitempty"`
-	Error       string `json:"error,omitempty"`
+	Status       string `json:"status"`
+	ModelID      string `json:"modelId"`
+	OutputS3Key  string `json:"outputS3Key,omitempty"`
+	Error        string `json:"error,omitempty"`
+	ConnectionID string `json:"connectionId,omitempty"`
+	JobType      string `json:"jobType,omitempty"`
+	JobID        string `json:"jobId,omitempty"`
+	JobStatus    string `json:"jobStatus,omitempty"`
+	FromFileType string `json:"fromFileType,omitempty"`
+	ToFileType   string `json:"toFileType,omitempty"`
+	NewS3Key     string `json:"newS3Key,omitempty"`
 }
 
 func handler(ctx context.Context, sqsEvent events.SQSEvent) error {
-	// Load AWS configuration
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to load SDK config: %v", err)
 	}
 
-	// Initialize DynamoDB client
 	dynamoClient := dynamodb.NewFromConfig(cfg)
-
-	// Get environment variables
 	connectionsTable := os.Getenv("connections_table")
 	websocketEndpoint := os.Getenv("websocket_api_endpoint")
 
-	// Initialize API Gateway client
+	log.Printf("connectionsTable: '%s' (len=%d)", connectionsTable, len(connectionsTable))
+	log.Printf("websocket_api_endpoint: '%s'", websocketEndpoint)
+
 	apiClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {
 		o.BaseEndpoint = &websocketEndpoint
 	})
 
-	// Process each message from SQS
 	for _, record := range sqsEvent.Records {
-		// Parse notification message
 		var notification NotificationMessage
 		if err := json.Unmarshal([]byte(record.Body), &notification); err != nil {
 			log.Printf("Error unmarshaling notification: %v", err)
 			continue
 		}
 
-		// Scan DynamoDB for all connections
-		scanInput := &dynamodb.ScanInput{
+		if notification.ConnectionID == "" {
+			log.Printf("No connectionId in notification message, skipping.")
+			continue
+		}
+
+		// Get the connection from DynamoDB
+		getInput := &dynamodb.GetItemInput{
 			TableName: &connectionsTable,
+			Key: map[string]types.AttributeValue{
+				"connectionId": &types.AttributeValueMemberS{Value: notification.ConnectionID},
+			},
 		}
-
-		result, err := dynamoClient.Scan(ctx, scanInput)
+		getResult, err := dynamoClient.GetItem(ctx, getInput)
 		if err != nil {
-			return fmt.Errorf("error scanning connections table: %v", err)
+			log.Printf("Error getting connectionId %s: %v", notification.ConnectionID, err)
+			continue
+		}
+		if getResult.Item == nil {
+			log.Printf("connectionId %s not found in DynamoDB, skipping.", notification.ConnectionID)
+			continue
 		}
 
-		// Send notification to all connected clients
-		for _, item := range result.Items {
-			connectionID := item["connectionId"].(*types.AttributeValueMemberS).Value
-
-			// Send message to WebSocket connection
-			_, err := apiClient.PostToConnection(ctx, &apigatewaymanagementapi.PostToConnectionInput{
-				ConnectionId: &connectionID,
-				Data:         []byte(record.Body),
-			})
-
-			if err != nil {
-				log.Printf("Error sending message to connection %s: %v", connectionID, err)
-				// Continue with other connections even if one fails
-				continue
-			}
+		// Relay the full SQS message body to the WebSocket client
+		_, err = apiClient.PostToConnection(ctx, &apigatewaymanagementapi.PostToConnectionInput{
+			ConnectionId: &notification.ConnectionID,
+			Data:         []byte(record.Body),
+		})
+		if err != nil {
+			log.Printf("Error sending message to connection %s: %v", notification.ConnectionID, err)
+			continue
 		}
+		log.Printf("Notification relayed to connectionId %s", notification.ConnectionID)
 	}
 
 	return nil

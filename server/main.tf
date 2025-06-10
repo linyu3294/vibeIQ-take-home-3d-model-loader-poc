@@ -494,7 +494,7 @@ resource "aws_lambda_function" "notification" {
   environment {
     variables = {
       connections_table = aws_dynamodb_table.websocket_connections.name
-      websocket_api_endpoint = "${aws_apigatewayv2_api.websocket_api.api_endpoint}/${aws_apigatewayv2_stage.websocket_api_stage.name}"
+      websocket_api_endpoint = "https://${replace(aws_apigatewayv2_api.websocket_api.api_endpoint, "wss://", "")}/${aws_apigatewayv2_stage.websocket_api_stage.name}"
     }
   }
 
@@ -512,7 +512,9 @@ resource "aws_iam_role_policy" "notification_lambda_policy" {
       {
         Effect = "Allow"
         Action = [
-          "dynamodb:Scan"
+          "dynamodb:Scan",
+          "dynamodb:GetItem",
+          "dynamodb:Query"
         ]
         Resource = aws_dynamodb_table.websocket_connections.arn
       },
@@ -525,6 +527,13 @@ resource "aws_iam_role_policy" "notification_lambda_policy" {
           "sqs:GetQueueAttributes"
         ]
         Resource = aws_sqs_queue.notification_queue.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "execute-api:ManageConnections"
+        ]
+        Resource = "${aws_apigatewayv2_api.websocket_api.execution_arn}/prod/POST/@connections/*"
       }
     ]
   })
