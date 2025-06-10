@@ -47,6 +47,10 @@ const (
 
 var supportedOutputFormats = []string{"glb", "gltf", "obj", "fbx", "usd", "usdz"}
 
+type SQSClient interface {
+	SendMessage(ctx context.Context, params *sqs.SendMessageInput, optFns ...func(*sqs.Options)) (*sqs.SendMessageOutput, error)
+}
+
 /*
 ###########################################
 Helper functions
@@ -161,7 +165,7 @@ func createConversionMessage(job ConversionJob) map[string]string {
 	}
 }
 
-func HandlePostRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+func HandlePostRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest, sqsClient SQSClient) (events.APIGatewayV2HTTPResponse, error) {
 	var job ConversionJob
 	if err := json.Unmarshal([]byte(request.Body), &job); err != nil {
 		return createErrorResponse(400, "Invalid request body"), nil
@@ -192,12 +196,6 @@ func HandlePostRequest(ctx context.Context, request events.APIGatewayV2HTTPReque
 		return createErrorResponse(500, "Error creating a job queue message"), err
 	}
 
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		return createErrorResponse(500, "Error loading AWS config"), err
-	}
-
-	sqsClient := sqs.NewFromConfig(cfg)
 	_, err = sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
 		QueueUrl:    aws.String(queueURL),
 		MessageBody: aws.String(string(messageBody)),
@@ -337,7 +335,12 @@ func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (event
 	case "GET":
 		return handleGetRequest(ctx, request)
 	case "POST":
-		return HandlePostRequest(ctx, request)
+		cfg, err := config.LoadDefaultConfig(ctx)
+		if err != nil {
+			return createErrorResponse(500, "Error loading AWS config"), err
+		}
+		sqsClient := sqs.NewFromConfig(cfg)
+		return HandlePostRequest(ctx, request, sqsClient)
 	case "PUT":
 		return handlePutRequest(ctx, request)
 	default:
