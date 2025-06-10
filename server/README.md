@@ -207,4 +207,9 @@ The application uses WebSocket connections for real-time updates. Here's how to 
 - Successful connection: You'll see a connection established message
 - Invalid API key: Connection will be rejected with a 403 error
 - Missing API key: Connection will be rejected with a 401 error
-- After disconnection: The connection record should be removed from DynamoDB
+
+
+#### Trouble Shooting
+
+- Sometimes, when using the  wscat -c "wss://your-api-gateway-url.execute-api.region.amazonaws.com/stage?x-api-key=your-api-key", connection is wierdly not establish and lambda does not trigger
+- Attempting to fix this, go to the AWS console and mannually delete the stage and redeploy again
