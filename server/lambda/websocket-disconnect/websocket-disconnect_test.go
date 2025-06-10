@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -24,33 +23,7 @@ func (m *mockDynamoDB) DeleteItem(input *dynamodb.DeleteItemInput) (*dynamodb.De
 	return &dynamodb.DeleteItemOutput{}, m.deleteItemErr
 }
 
-func TestHandleDisconnect_ValidAPIKey(t *testing.T) {
-	os.Setenv("api_key_value", "test-api-key")
-	defer os.Unsetenv("api_key_value")
-
-	mockDynamo := &mockDynamoDB{}
-	req := events.APIGatewayWebsocketProxyRequest{
-		RequestContext: events.APIGatewayWebsocketProxyRequestContext{
-			ConnectionID: "test-connection-id",
-		},
-		QueryStringParameters: map[string]string{
-			"apiKey": "test-api-key",
-		},
-	}
-	resp, err := HandleDisconnect(context.Background(), req, mockDynamo, "test-table")
-	assert.NoError(t, err)
-	assert.Equal(t, 200, resp.StatusCode)
-	assert.Equal(t, "Disconnected", resp.Body)
-}
-
-// Typically, it's not required to have api key to disconnect a websocket connection.
-func TestHandleDisconnect_MissingAPIKey(t *testing.T) {
-}
-
-// Typically, it's not required to have api key to disconnect a websocket connection.
-func TestHandleDisconnect_InvalidAPIKey(t *testing.T) {
-}
-
+// Typically, it's not required to have to use api key to disconnect a websocket connection.
 func TestHandleDisconnect_Success(t *testing.T) {
 	mockDynamo := &mockDynamoDB{}
 	req := events.APIGatewayWebsocketProxyRequest{
