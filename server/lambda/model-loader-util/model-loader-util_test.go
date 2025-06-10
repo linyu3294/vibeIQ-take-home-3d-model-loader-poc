@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
 	"testing"
@@ -286,4 +287,120 @@ func TestHandlePostRequest_MissingRequiredBody_Returns400(t *testing.T) {
 	assert.Equal(t, 400, resp5.StatusCode)
 	log.Printf("resp5: %+v", resp5)
 	assert.Equal(t, "{\"error\":\"Missing required fields: s3Key\"}", resp5.Body)
+}
+
+func TestHandlePostRequest_InvalidFromFileType_Returns400(t *testing.T) {
+	os.Setenv("api_key_value", "test-api-key")
+	os.Setenv("blender_jobs_queue_url", "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue")
+	defer func() {
+		os.Unsetenv("api_key_value")
+		os.Unsetenv("blender_jobs_queue_url")
+	}()
+
+	mockSQS := &mockSQSClient{}
+
+	req := events.APIGatewayV2HTTPRequest{
+		Headers: map[string]string{
+			"x-api-key":    "test-api-key",
+			"Content-Type": "application/json",
+		},
+		RequestContext: events.APIGatewayV2HTTPRequestContext{
+			HTTP: events.APIGatewayV2HTTPRequestContextHTTPDescription{
+				Method: "POST",
+			},
+		},
+		Body: `{
+			"connectionId": "test-connection-id",
+			"fromFileType": "word-document",
+			"toFileType": "glb",
+			"modelId": "test-model-id",
+			"s3Key": "test-s3-key"
+		}`,
+	}
+
+	resp, err := HandlePostRequest(context.Background(), req, mockSQS)
+	assert.NoError(t, err)
+
+	log.Printf("resp: %+v", resp)
+
+	assert.Equal(t, 400, resp.StatusCode)
+	assert.Equal(t, "{\"error\":\"Only blend files are supported\"}", resp.Body)
+}
+
+func TestHandlePostRequest_InvalidToFileType_Returns400(t *testing.T) {
+	os.Setenv("api_key_value", "test-api-key")
+	os.Setenv("blender_jobs_queue_url", "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue")
+	defer func() {
+		os.Unsetenv("api_key_value")
+		os.Unsetenv("blender_jobs_queue_url")
+	}()
+
+	mockSQS := &mockSQSClient{}
+
+	req := events.APIGatewayV2HTTPRequest{
+		Headers: map[string]string{
+			"x-api-key":    "test-api-key",
+			"Content-Type": "application/json",
+		},
+		RequestContext: events.APIGatewayV2HTTPRequestContext{
+			HTTP: events.APIGatewayV2HTTPRequestContextHTTPDescription{
+				Method: "POST",
+			},
+		},
+		Body: `{
+			"connectionId": "test-connection-id",
+			"fromFileType": "blend",
+			"toFileType": "docx",
+			"modelId": "test-model-id",
+			"s3Key": "test-s3-key"
+		}`,
+	}
+
+	resp, err := HandlePostRequest(context.Background(), req, mockSQS)
+	assert.NoError(t, err)
+
+	log.Printf("resp: %+v", resp)
+
+	assert.Equal(t, 400, resp.StatusCode)
+	assert.Equal(t, "{\"error\":\"Only glb, gltf, obj, fbx, usd, usdz files are supported\"}", resp.Body)
+}
+
+func TestHandlePostRequest_SQSError_Returns500(t *testing.T) {
+	os.Setenv("api_key_value", "test-api-key")
+	os.Setenv("blender_jobs_queue_url", "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue")
+	defer func() {
+		os.Unsetenv("api_key_value")
+		os.Unsetenv("blender_jobs_queue_url")
+	}()
+
+	// Create a mock SQS client that returns an error
+	mockSQS := &mockSQSClient{
+		sendMessageErr: errors.New("failed to send message to SQS"),
+	}
+
+	req := events.APIGatewayV2HTTPRequest{
+		Headers: map[string]string{
+			"x-api-key":    "test-api-key",
+			"Content-Type": "application/json",
+		},
+		RequestContext: events.APIGatewayV2HTTPRequestContext{
+			HTTP: events.APIGatewayV2HTTPRequestContextHTTPDescription{
+				Method: "POST",
+			},
+		},
+		Body: `{
+			"connectionId": "test-connection-id",
+			"fromFileType": "blend",
+			"toFileType": "glb",
+			"modelId": "test-model-id",
+			"s3Key": "test-s3-key"
+		}`,
+	}
+
+	resp, err := HandlePostRequest(context.Background(), req, mockSQS)
+
+	log.Printf("resp: %+v", resp)
+	assert.Error(t, err)
+	assert.Equal(t, 500, resp.StatusCode)
+	assert.Equal(t, "{\"error\":\"Error sending message to queue\"}", resp.Body)
 }
