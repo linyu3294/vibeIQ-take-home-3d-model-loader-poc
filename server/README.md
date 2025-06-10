@@ -1,10 +1,8 @@
+# Server Setup
 
-## Server Setup
+## AWS Configuration
 
-
-### AWS Configuration
-
-#### 1. Configure AWS CLI
+### 1. Configure AWS CLI
 
 Add the following to `~/.aws/config`:
 ```ini
@@ -13,7 +11,7 @@ region = us-east-1
 output = json
 ```
 
-#### 2. Set Up AWS Credentials
+### 2. Set Up AWS Credentials
 
 1. Create an IAM role in AWS Console
 2. Generate access keys
@@ -23,12 +21,15 @@ aws_access_key_id = your-secret-id
 aws_secret_access_key = your-secret-access-key
 ```
 
-### Build and Push Blender Docker Image to ECR
+## Build and Push Blender Docker Image to ECR
 
-1. **Prepare the Dockerfile**
-   - See `server/lambda/blender/Dockerfile.blender` for a headless Blender build
+### 1. Prepare the Dockerfile
+- See `server/lambda/blender/Dockerfile.blender` for a headless Blender build
 
-2. **Login to ECR and check for existing images for blender-headless repository (Skip if first time building)**
+### 2. Build and Push Process
+
+1. **Login to ECR and check for existing images for blender-headless repository (Skip if first time building)**
+
 2. **Build the Docker Image (on Mac M1/M2, target linux/amd64):**
    ```bash
    cd server/lambda/blender/
@@ -68,8 +69,7 @@ aws_secret_access_key = your-secret-access-key
      docker tag blender-headless:v{new-version-number} {replace-with-the-newly-created-repository-uri}:v{new-version-number}
      docker push {replace-with-the-newly-created-repository-uri}:v{new-version-number}
 
-4. **If not the first time pushing to the ECR repo, do this**
-
+4. **If not the first time pushing to the ECR repo:**
    - Once pushed, generate a new uri for the image with the latest version tag
    - Copy and paste the new url to the terraform.tfvars
    - Update the environmnet variable with the new terraform.tfvars by going to the server root directory and run the following:
@@ -78,11 +78,12 @@ aws_secret_access_key = your-secret-access-key
       sh ./build.sh
    ```
 
-#### Once the image has been pushed an ECR URI has been created, put that path in the environemnt variables in ```terraform.tfvars```. This file will be gitignored, only used for building the infrastructure.
+### 3. Update Configuration
+Once the image has been pushed an ECR URI has been created, put that path in the environemnt variables in ```terraform.tfvars```. This file will be gitignored, only used for building the infrastructure.
 
-### Infrastructure Setup
+## Infrastructure Setup
 
-#### S3 Bucket Setup
+### S3 Bucket Setup
 
 1. Create a generic S3 bucket in AWS Console:
    - Use default configurations
@@ -108,7 +109,7 @@ aws_secret_access_key = your-secret-access-key
    ```
    - Note down the bucket name for later use
 
-#### Terraform Configuration
+### Terraform Configuration
 
 1. Copy `terraform.example` to `terraform.tfvars`:
    ```bash
@@ -121,8 +122,6 @@ aws_secret_access_key = your-secret-access-key
    - Add your secrets
 
 ### Deployment
-
-#### Build and Deploy
 
 1. Navigate to the server directory:
    ```bash
@@ -140,14 +139,14 @@ This will:
 - Configure environment variables
 - Store API key in AWS Secrets Manager
 
-#### Environment Variables
+### Environment Variables
 
 The following are stored as Lambda environment variables:
 - S3 bucket name
 - Client domain
 - Other configuration values
 
-### Cleanup
+## Cleanup
 
 To remove all deployed resources:
 
@@ -168,11 +167,53 @@ This will remove:
 
 Note: The S3 bucket must be manually deleted from the AWS Console.
 
-### Testing WebSocket Connections
+## Integration Testing
 
-The application uses WebSocket connections for real-time updates. Here's how to test the WebSocket functionality:
+### Automated Testing
 
-#### Prerequisites for WebSocket Testing
+#### Manual Test Execution
+
+To run tests manually, you can use the following commands:
+
+```bash
+# Run all tests in the server directory
+go test ./...
+
+# Run tests for a specific package
+go test ./lambda/model-loader-util/...
+
+# Run tests with verbose output
+go test -v ./...
+
+# Run tests with coverage
+go test -cover ./...
+```
+
+#### Automatic Test Execution During Deployment
+
+Tests are automatically executed as part of the deployment process through the `build.sh` script. The process works as follows:
+
+1. When you run `./build.sh`, the script will:
+   - First run all tests using `go test ./...`
+   - If any test fails, the deployment process will be aborted
+   - Only if all tests pass will the script proceed with the AWS deployment
+
+This ensures that no code with failing tests can be deployed to production.
+
+To see the test results during deployment, look for the section marked with:
+```
+----------------------------------Running tests----------------------------------
+```
+
+If you see this message:
+```
+Tests failed. Aborting deployment.
+```
+It means one or more tests failed, and you should fix the failing tests before attempting deployment again.
+
+### Manual WebSocket Testing
+
+#### Prerequisites
 
 1. Deploy the application to AWS
 2. Note down your API Gateway WebSocket URL (format: `wss://xxxxx.execute-api.region.amazonaws.com/stage`)
@@ -208,8 +249,7 @@ The application uses WebSocket connections for real-time updates. Here's how to 
 - Invalid API key: Connection will be rejected with a 403 error
 - Missing API key: Connection will be rejected with a 401 error
 
-
-#### Trouble Shooting
+#### Troubleshooting
 
 - Sometimes, when using the  wscat -c "wss://your-api-gateway-url.execute-api.region.amazonaws.com/stage?x-api-key=your-api-key", connection is wierdly not establish and lambda does not trigger
 - Attempting to fix this, go to the AWS console and mannually delete the stage and redeploy again
