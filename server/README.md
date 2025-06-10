@@ -189,7 +189,7 @@ The application uses WebSocket connections for real-time updates. Here's how to 
 
 2. **Connect to WebSocket**
    ```bash
-   wscat -c "wss://your-api-gateway-url.execute-api.region.amazonaws.com/stage?apiKey=your-api-key"
+   wscat -c "wss://your-api-gateway-url.execute-api.region.amazonaws.com/stage?x-api-key=your-api-key"
    ```
 
 3. **Verify Connection in DynamoDB**

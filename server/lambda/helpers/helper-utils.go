@@ -44,7 +44,7 @@ func ValidateHttpAPIKey(req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2
 
 func ValidateWebSocketAPIKey(req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	fmt.Printf("WebSocket request query parameters: %v\n", req.QueryStringParameters)
-	apiKey := req.QueryStringParameters["apiKey"]
+	apiKey := req.QueryStringParameters["x-api-key"]
 	statusCode, body := validateAPIKey(apiKey)
 	if statusCode != 0 {
 		return events.APIGatewayProxyResponse{

@@ -35,7 +35,7 @@ func TestHandleConnect_ValidAPIKey(t *testing.T) {
 			ConnectionID: "test-connection-id",
 		},
 		QueryStringParameters: map[string]string{
-			"apiKey": "test-api-key",
+			"x-api-key": "test-api-key",
 		},
 	}
 	resp, err := HandleConnect(context.Background(), req, mockDynamo, "test-table")
@@ -68,7 +68,7 @@ func TestHandleConnect_InvalidAPIKey(t *testing.T) {
 			ConnectionID: "test-connection-id",
 		},
 		QueryStringParameters: map[string]string{
-			"apiKey": "wrong-api-key",
+			"x-api-key": "wrong-api-key",
 		},
 	}
 	resp, err := HandleConnect(context.Background(), req, mockDynamo, "test-table")
@@ -85,7 +85,7 @@ func TestHandleConnect_Success(t *testing.T) {
 			ConnectionID: "test-connection-id",
 		},
 		QueryStringParameters: map[string]string{
-			"apiKey": "test-api-key",
+			"x-api-key": "test-api-key",
 		},
 	}
 	resp, err := HandleConnect(context.Background(), req, mockDynamo, "test-table")
@@ -106,7 +106,7 @@ func TestHandleConnect_MissingTable(t *testing.T) {
 			ConnectionID: "test-connection-id",
 		},
 		QueryStringParameters: map[string]string{
-			"apiKey": "test-api-key",
+			"x-api-key": "test-api-key",
 		},
 	}
 	resp, err := HandleConnect(context.Background(), req, mockDynamo, "")
@@ -124,7 +124,7 @@ func TestHandleConnect_DynamoError(t *testing.T) {
 			ConnectionID: "test-connection-id",
 		},
 		QueryStringParameters: map[string]string{
-			"apiKey": "test-api-key",
+			"x-api-key": "test-api-key",
 		},
 	}
 	resp, err := HandleConnect(context.Background(), req, mockDynamo, "test-table")
