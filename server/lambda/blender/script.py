@@ -26,12 +26,13 @@ for k, v in os.environ.items():
     print(f"{k}: {v}")
 
 # Extract parameters
+bucket = os.environ.get("model_s3_bucket")
+s3_key = params.get("s3Key")
+
 from_file_type = params.get("fromFileType")
 to_file_type = params.get("toFileType")
 model_id = params.get("modelId")
-s3_key = params.get("s3Key")
-job_type = params.get("jobType")
-bucket = os.environ.get("model_s3_bucket")
+
 
 # S3 client
 s3 = boto3.client("s3")
@@ -56,59 +57,47 @@ try:
 
     # Export to the desired format
     if to_file_type == "glb":
-        print(f"Exporting to GLB: {output_file}")
-        bpy.ops.export_scene.gltf(filepath=output_file, export_format='GLB')
+        bpy.ops.export_scene.gltf(
+            filepath=output_file,
+            export_format='GLB',
+            export_texcoords=True,
+            export_normals=True,
+            export_yup=True
+            )
     elif to_file_type == "gltf":
-        print(f"Exporting to GLTF: {output_file}")
-        bpy.ops.export_scene.gltf(filepath=output_file, export_format='GLTF_SEPARATE')
+        bpy.ops.export_scene.gltf(
+            filepath=output_file,
+            export_format='GLTF_SEPARATE',
+            export_texcoords=True,
+            export_normals=True,
+            export_yup=True
+        )
     elif to_file_type == "obj":
-        print(f"Exporting to OBJ: {output_file}")
-        bpy.ops.export_scene.obj(filepath=output_file)
-    # if format_type == "glb":
-    #     bpy.ops.export_scene.gltf(
-    #         filepath=output_path,
-    #         export_format='GLB',
-    #         export_texcoords=True,
-    #         export_normals=True,
-    #         export_yup=True
-    #         )
-    # elif format_type == "gltf":
-    #     bpy.ops.export_scene.gltf(
-    #         filepath=output_path,
-    #         export_format='GLTF_SEPARATE',
-    #         export_texcoords=True,
-    #         export_normals=True,
-    #         export_yup=True
-    #     )
-    # elif format_type == "obj":
-    #     bpy.ops.export_scene.obj(
-    #         filepath=output_path,
-    #         use_materials=True
-    #     )
-    # elif format_type == "fbx":
-    #     bpy.ops.export_scene.fbx(
-    #         filepath=output_path,
-    #         use_selection=False,
-    #         apply_unit_scale=True,
-    #         bake_space_transform=True
-    #     )
-    # elif format_type == "usd":
-    #     bpy.ops.wm.usd_export(filepath=output_path)
-    # elif format_type == "usdz":
-    #     # Export as .usd first
-    #     intermediate_usd = output_path.replace(".usdz", ".usd")
-    #     bpy.ops.wm.usd_export(filepath=intermediate_usd)
+        bpy.ops.export_scene.obj(
+            filepath=output_file,
+            use_materials=True
+        )
+    elif to_file_type == "fbx":
+        bpy.ops.export_scene.fbx(
+            filepath=output_file,
+            use_selection=False,
+            apply_unit_scale=True,
+            bake_space_transform=True
+        )
+    elif to_file_type == "usd":
+        bpy.ops.wm.usd_export(filepath=output_file)
+    elif to_file_type == "usdz":
+        # Export as .usd first
+        intermediate_usd = output_file.replace(".usdz", ".usd")
+        bpy.ops.wm.usd_export(filepath=intermediate_usd)
     else:
         raise ValueError(f"Unsupported output file type: {to_file_type}")
 
-    # Upload the converted file to S3
-    output_s3_key = f"converted/{model_id}.{output_ext}"
-    print(f"Uploading {output_file} to s3://{bucket}/{output_s3_key}")
-    s3.upload_file(output_file, bucket, output_s3_key)
-
-    print("Conversion and upload successful!")
+    # At the end, print the output file path for handler.py to parse
+    print(f"OUTPUT_FILE={output_file}")
+    print("Conversion successful!")
 
 except Exception as e:
-    print("Error during Blender conversion or S3 operation:")
+    print("Error during Blender conversion:")
     traceback.print_exc()
     sys.exit(1)
