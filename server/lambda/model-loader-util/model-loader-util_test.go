@@ -106,9 +106,6 @@ func TestHandlePostRequest_MissingAPIKey(t *testing.T) {
 
 	resp, err := HandlePostRequest(context.Background(), req, mockSQS)
 	assert.NoError(t, err)
-
-	log.Printf("resp: %+v", resp)
-
 	assert.Equal(t, 401, resp.StatusCode)
 }
 
@@ -143,9 +140,6 @@ func TestHandlePostRequest_InvalidAPIKey(t *testing.T) {
 
 	resp, err := HandlePostRequest(context.Background(), req, mockSQS)
 	assert.NoError(t, err)
-
-	log.Printf("resp: %+v", resp)
-
 	assert.Equal(t, 403, resp.StatusCode)
 }
 
@@ -178,7 +172,6 @@ func TestHandlePostRequest_MissingRequiredBody_Returns400(t *testing.T) {
 	}
 
 	resp1, err1 := HandlePostRequest(context.Background(), req1, mockSQS)
-	log.Printf("resp1: %+v", resp1)
 	assert.NoError(t, err1)
 	assert.Equal(t, "{\"error\":\"Missing required fields: connectionId\"}", resp1.Body)
 
@@ -272,7 +265,6 @@ func TestHandlePostRequest_MissingRequiredBody_Returns400(t *testing.T) {
 	resp5, err5 := HandlePostRequest(context.Background(), req5, mockSQS)
 	assert.NoError(t, err5)
 	assert.Equal(t, 400, resp5.StatusCode)
-	log.Printf("resp5: %+v", resp5)
 	assert.Equal(t, "{\"error\":\"Missing required fields: s3Key\"}", resp5.Body)
 }
 
@@ -307,8 +299,6 @@ func TestHandlePostRequest_InvalidFromFileType_Returns400(t *testing.T) {
 
 	resp, err := HandlePostRequest(context.Background(), req, mockSQS)
 	assert.NoError(t, err)
-
-	log.Printf("resp: %+v", resp)
 
 	assert.Equal(t, 400, resp.StatusCode)
 	assert.Equal(t, "{\"error\":\"Only blend files are supported\"}", resp.Body)
@@ -345,8 +335,6 @@ func TestHandlePostRequest_InvalidToFileType_Returns400(t *testing.T) {
 
 	resp, err := HandlePostRequest(context.Background(), req, mockSQS)
 	assert.NoError(t, err)
-
-	log.Printf("resp: %+v", resp)
 
 	assert.Equal(t, 400, resp.StatusCode)
 	assert.Equal(t, "{\"error\":\"Only glb, gltf, obj, fbx, usd, usdz files are supported\"}", resp.Body)
@@ -386,7 +374,6 @@ func TestHandlePostRequest_SQSError_Returns500(t *testing.T) {
 
 	resp, err := HandlePostRequest(context.Background(), req, mockSQS)
 
-	log.Printf("resp: %+v", resp)
 	assert.Error(t, err)
 	assert.Equal(t, 500, resp.StatusCode)
 	assert.Equal(t, "{\"error\":\"Error sending message to queue\"}", resp.Body)
@@ -416,7 +403,6 @@ func TestHandleGetModelRequest_Success(t *testing.T) {
 
 	resp1, err1 := HandleGetModelRequest(context.Background(), req1)
 	assert.NoError(t, err1)
-	log.Printf("resp1: %+v", resp1)
 	assert.Equal(t, 200, resp1.StatusCode)
 
 	// Simplified regex to match the essential parts of the presigned URL
@@ -439,10 +425,113 @@ func TestHandleGetModelRequest_Success(t *testing.T) {
 
 	resp2, err2 := HandleGetModelRequest(context.Background(), req2)
 	assert.NoError(t, err2)
-	log.Printf("resp1: %+v", resp2)
-	assert.Equal(t, 200, resp1.StatusCode)
+	assert.Equal(t, 200, resp2.StatusCode)
 
 	// Simplified regex to match the essential parts of the presigned URL
 	expectedPattern2 := `^{"presignedUrl":"https://test-bucket\.s3\.us-east-1\.amazonaws\.com/glb/test-model-id\.glb\?.*"}$`
 	assert.Regexp(t, expectedPattern2, resp2.Body)
+}
+
+
+func TestHandleGetModelRequest_MissingAPIKey_Returns401(t *testing.T) {
+	os.Setenv("api_key_value", "test-api-key")
+	os.Setenv("model_s3_bucket", "test-bucket")
+	defer func() {
+		os.Unsetenv("api_key_value")
+		os.Unsetenv("model_s3_bucket")
+	}()
+
+	req := events.APIGatewayV2HTTPRequest{
+		Headers: map[string]string{
+			"Content-Type": "application/json",
+		},
+		PathParameters: map[string]string{
+			"id": "test-model-id",
+		},
+		QueryStringParameters: map[string]string{
+			"fileType":              "blend",
+			"getPresignedUploadURL": "true",
+		},
+	}
+
+	resp, err := HandleGetModelRequest(context.Background(), req)
+	assert.NoError(t, err)
+	assert.Equal(t, 401, resp.StatusCode)
+}
+
+func TestHandleGetModelRequest_IncorrectAPIKey_Returns403(t *testing.T) {
+	os.Setenv("api_key_value", "test-api-key")
+	os.Setenv("model_s3_bucket", "test-bucket")
+	defer func() {
+		os.Unsetenv("api_key_value")
+		os.Unsetenv("model_s3_bucket")
+	}()
+
+	req := events.APIGatewayV2HTTPRequest{
+		Headers: map[string]string{
+			"Content-Type": "application/json",
+			"x-api-key":    "incorrect-api-key",
+		},
+		PathParameters: map[string]string{
+			"id": "test-model-id",
+		},
+		QueryStringParameters: map[string]string{
+			"fileType":              "blend",
+			"getPresignedUploadURL": "true",
+		},
+	}
+
+	resp, err := HandleGetModelRequest(context.Background(), req)
+	assert.NoError(t, err)
+	assert.Equal(t, 403, resp.StatusCode)
+}
+
+func TestHandleGetModelRequest_MissingModelID_Returns400(t *testing.T) {
+	os.Setenv("api_key_value", "test-api-key")
+	os.Setenv("model_s3_bucket", "test-bucket")
+	defer func() {
+		os.Unsetenv("api_key_value")
+		os.Unsetenv("model_s3_bucket")
+	}()
+
+	req := events.APIGatewayV2HTTPRequest{
+		Headers: map[string]string{
+			"x-api-key":    "test-api-key",
+			"Content-Type": "application/json",
+		},
+		QueryStringParameters: map[string]string{
+			"fileType":              "glb",
+			"getPresignedUploadURL": "false",
+		},
+	}
+
+	resp, err := HandleGetModelRequest(context.Background(), req)
+	assert.NoError(t, err)
+	assert.Equal(t, 400, resp.StatusCode)
+}
+
+func TestHandleGetModelRequest_MissingFileType_Returns400(t *testing.T) {
+	os.Setenv("api_key_value", "test-api-key")
+	os.Setenv("model_s3_bucket", "test-bucket")
+	defer func() {
+		os.Unsetenv("api_key_value")
+		os.Unsetenv("model_s3_bucket")
+	}()
+
+	req := events.APIGatewayV2HTTPRequest{
+		Headers: map[string]string{
+			"x-api-key":    "test-api-key",
+			"Content-Type": "application/json",
+		},
+		PathParameters: map[string]string{
+			"id": "test-model-id",
+		},
+		QueryStringParameters: map[string]string{
+			"getPresignedUploadURL": "false",
+		},
+	}
+
+	resp, err := HandleGetModelRequest(context.Background(), req)
+	assert.NoError(t, err)
+	assert.Equal(t, 400, resp.StatusCode)
 }
