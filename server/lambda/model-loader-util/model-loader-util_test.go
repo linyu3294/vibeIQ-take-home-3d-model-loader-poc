@@ -10,21 +10,8 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/stretchr/testify/assert"
 )
-
-type mockDynamoDB struct {
-	dynamodbiface.DynamoDBAPI
-	putItemErr   error
-	putItemInput *dynamodb.PutItemInput
-}
-
-func (m *mockDynamoDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
-	m.putItemInput = input
-	return &dynamodb.PutItemOutput{}, m.putItemErr
-}
 
 type mockSQSClient struct {
 	sendMessageInput *sqs.SendMessageInput
