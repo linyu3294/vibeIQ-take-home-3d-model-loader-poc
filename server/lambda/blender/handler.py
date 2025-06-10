@@ -13,10 +13,10 @@ def send_notification(queue_url, message):
     logger.info(f"Notification sent to SQS: {message}")
 
 def handler(event, context):
-    notification_queue_url = os.environ.get('NOTIFICATION_QUEUE_URL')
+    notification_queue_url = os.environ.get('notification_queue_url')
     bucket = os.environ.get('model_s3_bucket')
     if not notification_queue_url:
-        raise RuntimeError("NOTIFICATION_QUEUE_URL environment variable is not set")
+        raise RuntimeError("notification_queue_url environment variable is not set")
     if not bucket:
         raise RuntimeError("model_s3_bucket environment variable is not set")
 

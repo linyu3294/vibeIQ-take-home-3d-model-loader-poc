@@ -394,7 +394,7 @@ resource "aws_lambda_function" "blender" {
     variables = {
       model_s3_bucket                = var.model_s3_bucket
       blender_jobs_queue_url   = aws_sqs_queue.blender_jobs.url
-      NOTIFICATION_QUEUE_URL   = aws_sqs_queue.notification_queue.url
+      notification_queue_url   = aws_sqs_queue.notification_queue.url
     }
   }
 }
@@ -489,7 +489,8 @@ resource "aws_lambda_function" "notification" {
   runtime       = "provided.al2"
   filename      = "${path.module}/lambda/notification/notification.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda/notification/notification.zip")
-
+  depends_on = [aws_dynamodb_table.websocket_connections]
+  
   environment {
     variables = {
       connections_table = aws_dynamodb_table.websocket_connections.name
