@@ -330,21 +330,37 @@ func handlePutRequest(ctx context.Context, request events.APIGatewayV2HTTPReques
 	}, nil
 }
 
-func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	switch request.RequestContext.HTTP.Method {
+func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayV2HTTPResponse, error) {
+	req := events.APIGatewayV2HTTPRequest{
+		Headers: request.Headers,
+		Body:    request.Body,
+		RequestContext: events.APIGatewayV2HTTPRequestContext{
+			HTTP: events.APIGatewayV2HTTPRequestContextHTTPDescription{
+				Method: request.HTTPMethod,
+			},
+		},
+		PathParameters:        request.PathParameters,
+		QueryStringParameters: request.QueryStringParameters,
+	}
+	switch strings.ToUpper(req.RequestContext.HTTP.Method) {
 	case "GET":
-		return handleGetRequest(ctx, request)
+		return handleGetRequest(ctx, req)
 	case "POST":
 		cfg, err := config.LoadDefaultConfig(ctx)
 		if err != nil {
 			return createErrorResponse(500, "Error loading AWS config"), err
 		}
+
 		sqsClient := sqs.NewFromConfig(cfg)
-		return HandlePostRequest(ctx, request, sqsClient)
+		return HandlePostRequest(ctx, req, sqsClient)
 	case "PUT":
-		return handlePutRequest(ctx, request)
+		return handlePutRequest(ctx, req)
 	default:
-		return createErrorResponse(405, "Method not allowed"), nil
+		return events.APIGatewayV2HTTPResponse{
+			StatusCode: 405,
+			Headers:    map[string]string{contentTypeHeader: jsonContentType},
+			Body:       "Method not allowed",
+		}, nil
 	}
 }
 
