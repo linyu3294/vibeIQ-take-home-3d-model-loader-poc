@@ -120,7 +120,7 @@ func validateFileTypesForConversion(job ConversionJob) (bool, events.APIGatewayV
 	return true, events.APIGatewayV2HTTPResponse{}
 }
 
-func handlePostValidations(request events.APIGatewayProxyRequest, job ConversionJob) (events.APIGatewayV2HTTPResponse, error) {
+func handlePostValidations(request events.APIGatewayV2HTTPRequest, job ConversionJob) (events.APIGatewayV2HTTPResponse, error) {
 	if valid, resp := validateContentType(request.Headers[contentTypeHeader]); !valid {
 		return resp, nil
 	}
@@ -161,7 +161,7 @@ func createConversionMessage(job ConversionJob) map[string]string {
 	}
 }
 
-func handlePostRequest(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayV2HTTPResponse, error) {
+func HandlePostRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	var job ConversionJob
 	if err := json.Unmarshal([]byte(request.Body), &job); err != nil {
 		return createErrorResponse(400, "Invalid request body"), nil
@@ -216,7 +216,7 @@ GET /v1/3d-model/{unique-model-id}?upload={boolean}&fileType={string}
 ###########################################
 */
 
-func handleGetRequest(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayV2HTTPResponse, error) {
+func handleGetRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	apiKeyResp, err := helpers.ValidateHttpAPIKey(events.APIGatewayV2HTTPRequest{
 		Headers: request.Headers,
 	})
@@ -287,7 +287,7 @@ func handleGetRequest(ctx context.Context, request events.APIGatewayProxyRequest
 	}, nil
 }
 
-func handlePutRequest(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayV2HTTPResponse, error) {
+func handlePutRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	apiKeyResp, err := helpers.ValidateHttpAPIKey(events.APIGatewayV2HTTPRequest{
 		Headers: request.Headers,
 	})
@@ -332,20 +332,16 @@ func handlePutRequest(ctx context.Context, request events.APIGatewayProxyRequest
 	}, nil
 }
 
-func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayV2HTTPResponse, error) {
-	switch request.HTTPMethod {
+func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	switch request.RequestContext.HTTP.Method {
 	case "GET":
 		return handleGetRequest(ctx, request)
 	case "POST":
-		return handlePostRequest(ctx, request)
+		return HandlePostRequest(ctx, request)
 	case "PUT":
 		return handlePutRequest(ctx, request)
 	default:
-		return events.APIGatewayV2HTTPResponse{
-			StatusCode: 405,
-			Headers:    map[string]string{contentTypeHeader: jsonContentType},
-			Body:       "Method not allowed",
-		}, nil
+		return createErrorResponse(405, "Method not allowed"), nil
 	}
 }
 
