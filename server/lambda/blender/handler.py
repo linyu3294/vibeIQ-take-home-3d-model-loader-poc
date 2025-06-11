@@ -65,7 +65,7 @@ def handler(event, context):
                 "connectionId": connection_id,
                 "jobType": job_type,
                 "jobId": job_id,
-                "jobStatus": "completed"
+                "jobStatus": "completed",
                 "fromFileType": from_file_type,
                 "toFileType": to_file_type,
                 "modelId": model_id,
