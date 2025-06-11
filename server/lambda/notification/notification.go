@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewaymanagementapi"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -28,22 +30,24 @@ type NotificationMessage struct {
 	Error        string `json:"error"`
 }
 
-func handler(ctx context.Context, sqsEvent events.SQSEvent) error {
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to load SDK config: %v", err)
-	}
+type DynamoDBClient interface {
+	GetItem(ctx context.Context, params *dynamodb.GetItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error)
+	PutItem(ctx context.Context, params *dynamodb.PutItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
+	Query(ctx context.Context, params *dynamodb.QueryInput, optFns ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error)
+}
 
-	dynamoClient := dynamodb.NewFromConfig(cfg)
+type APIGatewayClient interface {
+	PostToConnection(ctx context.Context, params *apigatewaymanagementapi.PostToConnectionInput, optFns ...func(*apigatewaymanagementapi.Options)) (*apigatewaymanagementapi.PostToConnectionOutput, error)
+}
+
+func HandlerWithClients(ctx context.Context, sqsEvent events.SQSEvent, dynamoClient DynamoDBClient, apiClient APIGatewayClient) error {
 	connectionsTable := os.Getenv("connections_table")
+	jobHistoryTable := os.Getenv("job_history_table")
 	websocketEndpoint := os.Getenv("websocket_api_endpoint")
 
 	log.Printf("connectionsTable: '%s' (len=%d)", connectionsTable, len(connectionsTable))
+	log.Printf("notificationsTable: '%s'", jobHistoryTable)
 	log.Printf("websocket_api_endpoint: '%s'", websocketEndpoint)
-
-	apiClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {
-		o.BaseEndpoint = &websocketEndpoint
-	})
 
 	for _, record := range sqsEvent.Records {
 		var notification NotificationMessage
@@ -57,7 +61,6 @@ func handler(ctx context.Context, sqsEvent events.SQSEvent) error {
 			continue
 		}
 
-		// Get the connection from DynamoDB
 		getInput := &dynamodb.GetItemInput{
 			TableName: &connectionsTable,
 			Key: map[string]types.AttributeValue{
@@ -74,7 +77,58 @@ func handler(ctx context.Context, sqsEvent events.SQSEvent) error {
 			continue
 		}
 
-		// Relay the full SQS message body to the WebSocket client
+		// Check for existing record with same modelId, jobType, fromFileType, and toFileType
+		queryInput := &dynamodb.QueryInput{
+			TableName:              &jobHistoryTable,
+			IndexName:              aws.String("ModelJobTypeIndex"),
+			KeyConditionExpression: aws.String("modelId = :modelId AND jobType = :jobType"),
+			FilterExpression:       aws.String("fromFileType = :fromFileType AND toFileType = :toFileType"),
+			ExpressionAttributeValues: map[string]types.AttributeValue{
+				":modelId":      &types.AttributeValueMemberS{Value: notification.ModelID},
+				":jobType":      &types.AttributeValueMemberS{Value: notification.JobType},
+				":fromFileType": &types.AttributeValueMemberS{Value: notification.FromFileType},
+				":toFileType":   &types.AttributeValueMemberS{Value: notification.ToFileType},
+			},
+		}
+
+		queryResult, err := dynamoClient.Query(ctx, queryInput)
+		if err != nil {
+			log.Printf("Error querying for existing record: %v", err)
+			continue
+		}
+
+		var existingJobId string
+		if len(queryResult.Items) > 0 {
+			// Found existing record, use its jobId
+			existingJobId = queryResult.Items[0]["jobId"].(*types.AttributeValueMemberS).Value
+		} else {
+			// No existing record, use the new jobId
+			existingJobId = notification.JobID
+		}
+
+		putInput := &dynamodb.PutItemInput{
+			TableName: &jobHistoryTable,
+			Item: map[string]types.AttributeValue{
+				"jobId":        &types.AttributeValueMemberS{Value: existingJobId},
+				"connectionId": &types.AttributeValueMemberS{Value: notification.ConnectionID},
+				"jobType":      &types.AttributeValueMemberS{Value: notification.JobType},
+				"jobStatus":    &types.AttributeValueMemberS{Value: notification.JobStatus},
+				"fromFileType": &types.AttributeValueMemberS{Value: notification.FromFileType},
+				"toFileType":   &types.AttributeValueMemberS{Value: notification.ToFileType},
+				"modelId":      &types.AttributeValueMemberS{Value: notification.ModelID},
+				"s3Key":        &types.AttributeValueMemberS{Value: notification.S3Key},
+				"newS3Key":     &types.AttributeValueMemberS{Value: notification.NewS3Key},
+				"error":        &types.AttributeValueMemberS{Value: notification.Error},
+				"timestamp":    &types.AttributeValueMemberS{Value: time.Now().UTC().Format(time.RFC3339)},
+			},
+		}
+
+		_, err = dynamoClient.PutItem(ctx, putInput)
+		if err != nil {
+			log.Printf("Error saving notification to DynamoDB: %v", err)
+			continue
+		}
+
 		_, err = apiClient.PostToConnection(ctx, &apigatewaymanagementapi.PostToConnectionInput{
 			ConnectionId: &notification.ConnectionID,
 			Data:         []byte(record.Body),
@@ -87,6 +141,21 @@ func handler(ctx context.Context, sqsEvent events.SQSEvent) error {
 	}
 
 	return nil
+}
+
+func handler(ctx context.Context, sqsEvent events.SQSEvent) error {
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to load SDK config: %v", err)
+	}
+	dynamoClient := dynamodb.NewFromConfig(cfg)
+	websocketEndpoint := os.Getenv("websocket_api_endpoint")
+
+	apiEndpoint := websocketEndpoint
+	apiClient := apigatewaymanagementapi.NewFromConfig(cfg, func(o *apigatewaymanagementapi.Options) {
+		o.BaseEndpoint = &apiEndpoint
+	})
+	return HandlerWithClients(ctx, sqsEvent, dynamoClient, apiClient)
 }
 
 func main() {

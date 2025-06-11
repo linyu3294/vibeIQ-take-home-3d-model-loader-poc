@@ -238,6 +238,75 @@ resource "aws_dynamodb_table" "websocket_connections" {
   tags = local.tags
 }
 
+resource "aws_dynamodb_table" "job_history_table" {
+  name           = "${var.project_name}-${var.environment}-job-history-table"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "jobId"
+
+  attribute {
+    name = "jobId"
+    type = "S"
+  }
+
+  attribute {
+    name = "modelId"
+    type = "S"
+  }
+
+  attribute {
+    name = "jobType"
+    type = "S"
+  }
+
+  attribute {
+    name = "jobStatus"
+    type = "S"
+  }
+
+  attribute {
+    name = "fromFileType"
+    type = "S"
+  }
+
+  attribute {
+    name = "toFileType"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name               = "ModelJobTypeIndex"
+    hash_key           = "modelId"
+    range_key          = "jobType"
+    projection_type    = "ALL"
+  }
+
+  global_secondary_index {
+    name               = "JobStatusIndex"
+    hash_key           = "jobStatus"
+    projection_type    = "ALL"
+  }
+
+  global_secondary_index {
+    name               = "ToFileTypeIndex"
+    hash_key           = "toFileType"
+    projection_type    = "ALL"
+  }
+
+  global_secondary_index {
+    name               = "FromFileTypeIndex"
+    hash_key           = "fromFileType"
+    projection_type    = "ALL"
+  }
+
+  timeouts {
+    create = "30m"
+    update = "30m"
+    delete = "30m"
+  }
+
+  tags = local.tags
+}
+
 resource "aws_iam_role_policy_attachment" "connect_lambda_dynamodb" {
   role       = aws_iam_role.lambda_app_exec.name
   policy_arn = aws_iam_policy.dynamodb_access.arn
@@ -495,6 +564,7 @@ resource "aws_lambda_function" "notification" {
     variables = {
       connections_table = aws_dynamodb_table.websocket_connections.name
       websocket_api_endpoint = "https://${replace(aws_apigatewayv2_api.websocket_api.api_endpoint, "wss://", "")}/${aws_apigatewayv2_stage.websocket_api_stage.name}"
+      job_history_table = aws_dynamodb_table.job_history_table.name
     }
   }
 
@@ -517,6 +587,19 @@ resource "aws_iam_role_policy" "notification_lambda_policy" {
           "dynamodb:Query"
         ]
         Resource = aws_dynamodb_table.websocket_connections.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ]
+        Resource = [
+          aws_dynamodb_table.job_history_table.arn,
+          "${aws_dynamodb_table.job_history_table.arn}/index/*"
+        ]
       },
       {
         Effect = "Allow"
