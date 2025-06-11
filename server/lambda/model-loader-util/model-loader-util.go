@@ -1,12 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"slices"
@@ -284,56 +281,6 @@ func HandleGetModelRequest(ctx context.Context, request events.APIGatewayV2HTTPR
 	return createSuccessResponse(200, successResp), nil
 }
 
-func handlePutRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	apiKeyResp, err := helpers.ValidateHttpAPIKey(request)
-	if err != nil {
-		return createErrorResponse(500, "Error validating API key"), err
-	}
-	if apiKeyResp.StatusCode != 0 {
-		return apiKeyResp, nil
-	}
-
-	modelID, exists := request.PathParameters["id"]
-	if !exists {
-		return createErrorResponse(400, "Model ID is required"), nil
-	}
-
-	fromFileType := request.QueryStringParameters["fileType"]
-	if fromFileType == "" {
-		return createErrorResponse(400, "Parameter fileType is required"), nil
-	}
-
-	s3Key := fmt.Sprintf("%s/%s.%s", fromFileType, modelID, fromFileType)
-
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		return createErrorResponse(500, "AWS config error"), err
-	}
-	s3Client := s3.NewFromConfig(cfg)
-	bucket := os.Getenv("model_s3_bucket")
-
-	var bodyReader io.Reader
-	if request.IsBase64Encoded {
-		bodyBytes, err := base64.StdEncoding.DecodeString(request.Body)
-		if err != nil {
-			return createErrorResponse(400, "Invalid base64 encoded body"), err
-		}
-		bodyReader = bytes.NewReader(bodyBytes)
-	} else {
-		bodyReader = strings.NewReader(request.Body)
-	}
-
-	_, err = s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(s3Key),
-		Body:   bodyReader,
-	})
-	if err != nil {
-		return createErrorResponse(500, fmt.Sprintf("Failed to upload to S3: %v", err)), err
-	}
-	return createSuccessResponse(200, ""), nil
-}
-
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayV2HTTPResponse, error) {
 	log.Println("Received request:", request)
 	req := events.APIGatewayV2HTTPRequest{
@@ -363,8 +310,6 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 		sqsClient := sqs.NewFromConfig(cfg)
 		return HandlePostRequest(ctx, req, sqsClient)
-	case "PUT":
-		return handlePutRequest(ctx, req)
 	default:
 		return events.APIGatewayV2HTTPResponse{
 			StatusCode: 405,
