@@ -61,6 +61,21 @@ resource "aws_iam_role_policy" "lambda_app_s3_policy" {
           "s3:DeleteObject"
         ],
         Resource = "arn:aws:s3:::${var.model_s3_bucket}/*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "dynamodb:Query",
+          "dynamodb:Scan",
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem"
+        ],
+        Resource = [
+          aws_dynamodb_table.job_history_table.arn,
+          "${aws_dynamodb_table.job_history_table.arn}/index/*"
+        ]
       }
     ]
   })
@@ -128,6 +143,20 @@ resource "aws_apigatewayv2_integration" "put_model" {
   integration_uri  = aws_lambda_function.model_loader_util.invoke_arn
 }
 
+# Add GET /3d-models route and integration
+resource "aws_apigatewayv2_route" "get_models" {
+  api_id    = aws_apigatewayv2_api.model_loader_api.id
+  route_key = "GET /3d-models"
+  target    = "integrations/${aws_apigatewayv2_integration.get_models.id}"
+  authorization_type = "NONE"
+}
+
+resource "aws_apigatewayv2_integration" "get_models" {
+  api_id           = aws_apigatewayv2_api.model_loader_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.model_loader_util.invoke_arn
+}
+
 ###########################################
 # Model Loader Lambda Resources
 ###########################################
@@ -147,6 +176,7 @@ resource "aws_lambda_function" "model_loader_util" {
       model_s3_bucket = var.model_s3_bucket
       api_key_value = var.api_key_value
       blender_jobs_queue_url = aws_sqs_queue.blender_jobs.url
+      job_history_table = aws_dynamodb_table.job_history_table.name
     }
   }
 

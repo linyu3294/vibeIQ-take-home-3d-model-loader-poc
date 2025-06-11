@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"vibeIQ-take-home-3d-model-loader-poc/lambda/helpers"
@@ -15,6 +16,8 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/google/uuid"
@@ -44,6 +47,25 @@ type ConversionJob struct {
 	S3Key        string `json:"s3Key"`
 }
 
+type SuccessGetModelsResponse struct {
+	Models     []ModelMetadata `json:"models"`
+	NextCursor string          `json:"nextCursor,omitempty"`
+}
+
+type ModelMetadata struct {
+	JobID        string `json:"jobId"`
+	ConnectionID string `json:"connectionId"`
+	JobType      string `json:"jobType"`
+	JobStatus    string `json:"jobStatus"`
+	FromFileType string `json:"fromFileType"`
+	ToFileType   string `json:"toFileType"`
+	ModelID      string `json:"modelId"`
+	S3Key        string `json:"s3Key"`
+	NewS3Key     string `json:"newS3Key,omitempty"`
+	Error        string `json:"error,omitempty"`
+	Timestamp    string `json:"timestamp"`
+}
+
 const (
 	contentTypeHeader = "Content-Type"
 	apiKeyHeader      = "x-api-key"
@@ -54,6 +76,10 @@ var supportedOutputFormats = []string{"glb", "gltf", "obj", "fbx", "usd", "usdz"
 
 type SQSClient interface {
 	SendMessage(ctx context.Context, params *sqs.SendMessageInput, optFns ...func(*sqs.Options)) (*sqs.SendMessageOutput, error)
+}
+
+type DynamoDBClient interface {
+	Query(ctx context.Context, params *dynamodb.QueryInput, optFns ...func(*dynamodb.Options)) (*dynamodb.QueryOutput, error)
 }
 
 /*
@@ -281,6 +307,115 @@ func HandleGetModelRequest(ctx context.Context, request events.APIGatewayV2HTTPR
 	return createSuccessResponse(200, successResp), nil
 }
 
+func HandleGetModelsRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	apiKeyResp, err := helpers.ValidateHttpAPIKey(request)
+	if err != nil {
+		return createErrorResponse(500, "Error validating API key"), err
+	}
+	if apiKeyResp.StatusCode != 0 {
+		return apiKeyResp, nil
+	}
+
+	fileType := request.QueryStringParameters["fileType"]
+	limitStr := request.QueryStringParameters["limit"]
+	cursor := request.QueryStringParameters["cursor"]
+
+	limit := 10
+	if limitStr != "" {
+		var err error
+		limit, err = strconv.Atoi(limitStr)
+		if err != nil || limit <= 0 || limit > 100 {
+			return createErrorResponse(400, "Invalid limit parameter. Must be a positive number between 1 and 100"), nil
+		}
+	}
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return createErrorResponse(500, "Failed to load AWS config"), err
+	}
+
+	dynamoClient := dynamodb.NewFromConfig(cfg)
+	tableName := os.Getenv("job_history_table")
+
+	models := make([]ModelMetadata, 0, limit)
+	var lastEvaluatedKey map[string]types.AttributeValue
+	if cursor != "" {
+		if err := json.Unmarshal([]byte(cursor), &lastEvaluatedKey); err != nil {
+			return createErrorResponse(400, "Invalid cursor format"), nil
+		}
+	}
+
+	for len(models) < limit {
+		queryInput := &dynamodb.QueryInput{
+			TableName: aws.String(tableName),
+			Limit:     aws.Int32(int32(limit - len(models) + 1)), // fetch a bit more to check for more pages
+		}
+
+		if fileType != "" {
+			queryInput.IndexName = aws.String("ToFileTypeIndex")
+			queryInput.KeyConditionExpression = aws.String("toFileType = :fileType")
+			queryInput.ExpressionAttributeValues = map[string]types.AttributeValue{
+				":fileType": &types.AttributeValueMemberS{Value: fileType},
+			}
+		}
+		if lastEvaluatedKey != nil {
+			queryInput.ExclusiveStartKey = lastEvaluatedKey
+		}
+
+		result, err := dynamoClient.Query(ctx, queryInput)
+		if err != nil {
+			return createErrorResponse(500, "Failed to query models"), err
+		}
+
+		for _, item := range result.Items {
+			jobStatus := item["jobStatus"].(*types.AttributeValueMemberS).Value
+			if jobStatus == "failed" {
+				continue
+			}
+			model := ModelMetadata{
+				JobID:        item["jobId"].(*types.AttributeValueMemberS).Value,
+				ConnectionID: item["connectionId"].(*types.AttributeValueMemberS).Value,
+				JobType:      item["jobType"].(*types.AttributeValueMemberS).Value,
+				JobStatus:    jobStatus,
+				FromFileType: item["fromFileType"].(*types.AttributeValueMemberS).Value,
+				ToFileType:   item["toFileType"].(*types.AttributeValueMemberS).Value,
+				ModelID:      item["modelId"].(*types.AttributeValueMemberS).Value,
+				S3Key:        item["s3Key"].(*types.AttributeValueMemberS).Value,
+				Timestamp:    item["timestamp"].(*types.AttributeValueMemberS).Value,
+			}
+			if newS3Key, ok := item["newS3Key"]; ok {
+				model.NewS3Key = newS3Key.(*types.AttributeValueMemberS).Value
+			}
+			if errorMsg, ok := item["error"]; ok {
+				model.Error = errorMsg.(*types.AttributeValueMemberS).Value
+			}
+			models = append(models, model)
+			if len(models) == limit {
+				break
+			}
+		}
+
+		if len(models) == limit || result.LastEvaluatedKey == nil {
+			lastEvaluatedKey = result.LastEvaluatedKey
+			break
+		}
+		lastEvaluatedKey = result.LastEvaluatedKey
+	}
+
+	response := SuccessGetModelsResponse{
+		Models: models,
+	}
+	if lastEvaluatedKey != nil && len(models) == limit {
+		nextCursor, err := json.Marshal(lastEvaluatedKey)
+		if err != nil {
+			return createErrorResponse(500, "Failed to generate next cursor"), err
+		}
+		response.NextCursor = string(nextCursor)
+	}
+
+	return createSuccessResponse(200, response), nil
+}
+
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayV2HTTPResponse, error) {
 	log.Println("Received request:", request)
 	req := events.APIGatewayV2HTTPRequest{
@@ -300,6 +435,9 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	case "GET":
 		if strings.Contains(req.RawPath, "/3d-model/") {
 			return HandleGetModelRequest(ctx, req)
+		}
+		if strings.Contains(req.RawPath, "/3d-models") {
+			return HandleGetModelsRequest(ctx, req)
 		}
 		return createErrorResponse(404, "Not found"), nil
 	case "POST":
