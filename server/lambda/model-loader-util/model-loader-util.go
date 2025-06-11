@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"slices"
 	"strings"
@@ -290,9 +294,9 @@ func handlePutRequest(ctx context.Context, request events.APIGatewayV2HTTPReques
 		return createErrorResponse(400, "Model ID is required"), nil
 	}
 
-	fromFileType := request.QueryStringParameters["fromFileType"]
+	fromFileType := request.QueryStringParameters["fileType"]
 	if fromFileType == "" {
-		return createErrorResponse(400, "fromFileType query parameter is required"), nil
+		return createErrorResponse(400, "Parameter fileType is required"), nil
 	}
 
 	s3Key := fmt.Sprintf("%s/%s.%s", fromFileType, modelID, fromFileType)
@@ -303,19 +307,32 @@ func handlePutRequest(ctx context.Context, request events.APIGatewayV2HTTPReques
 	}
 	s3Client := s3.NewFromConfig(cfg)
 	bucket := os.Getenv("model_s3_bucket")
+
+	var bodyReader io.Reader
+	if request.IsBase64Encoded {
+		bodyBytes, err := base64.StdEncoding.DecodeString(request.Body)
+		if err != nil {
+			return createErrorResponse(400, "Invalid base64 encoded body"), err
+		}
+		bodyReader = bytes.NewReader(bodyBytes)
+	} else {
+		bodyReader = strings.NewReader(request.Body)
+	}
+
 	_, err = s3Client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(s3Key),
-		Body:   strings.NewReader(request.Body),
+		Body:   bodyReader,
 	})
 	if err != nil {
 		return createErrorResponse(500, fmt.Sprintf("Failed to upload to S3: %v", err)), err
 	}
 
-	return createSuccessResponse(200, "File uploaded successfully - "), nil
+	return createSuccessResponse(200, "File uploaded successfully"), nil
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayV2HTTPResponse, error) {
+	log.Println("Received request:", request)
 	req := events.APIGatewayV2HTTPRequest{
 		Headers: request.Headers,
 		Body:    request.Body,
@@ -326,10 +343,12 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		},
 		PathParameters:        request.PathParameters,
 		QueryStringParameters: request.QueryStringParameters,
+		RawPath:               request.Path,
 	}
+	log.Printf("Converted request path: %s", req.RawPath)
 	switch strings.ToUpper(req.RequestContext.HTTP.Method) {
 	case "GET":
-		if strings.HasPrefix(req.RawPath, "/v1/3d-model/") {
+		if strings.Contains(req.RawPath, "/3d-model/") {
 			return HandleGetModelRequest(ctx, req)
 		}
 		return createErrorResponse(404, "Not found"), nil
