@@ -31,8 +31,12 @@ type SuccessPostResponse struct {
 	Status string `json:"status"`
 }
 
-type SuccessGetResponse struct {
+type SuccessGetModelResponse struct {
 	PresignedUrl string `json:"presignedUrl"`
+}
+
+type SuccessPutResponse struct {
+	Message string `json:"message"`
 }
 
 type ConversionJob struct {
@@ -263,7 +267,7 @@ func HandleGetModelRequest(ctx context.Context, request events.APIGatewayV2HTTPR
 		if err != nil {
 			return createErrorResponse(500, "Failed to generate presigned PUT URL"), err
 		}
-		successResp := SuccessGetResponse{PresignedUrl: presignedURL.URL}
+		successResp := SuccessGetModelResponse{PresignedUrl: presignedURL.URL}
 		return createSuccessResponse(200, successResp), nil
 	}
 
@@ -276,7 +280,7 @@ func HandleGetModelRequest(ctx context.Context, request events.APIGatewayV2HTTPR
 		return createErrorResponse(500, "Failed to generate presigned URL"), err
 	}
 
-	successResp := SuccessGetResponse{PresignedUrl: presignedURL.URL}
+	successResp := SuccessGetModelResponse{PresignedUrl: presignedURL.URL}
 	return createSuccessResponse(200, successResp), nil
 }
 
@@ -327,8 +331,7 @@ func handlePutRequest(ctx context.Context, request events.APIGatewayV2HTTPReques
 	if err != nil {
 		return createErrorResponse(500, fmt.Sprintf("Failed to upload to S3: %v", err)), err
 	}
-
-	return createSuccessResponse(200, "File uploaded successfully"), nil
+	return createSuccessResponse(200, ""), nil
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayV2HTTPResponse, error) {
