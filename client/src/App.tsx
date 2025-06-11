@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import './App.css'
 
 // Mock data
@@ -77,106 +77,149 @@ function Gallery() {
   const wsRef = useRef<WebSocket | null>(null);
   const connectionIdSet = useRef(false);
 
-  useEffect(() => {
-    // Open WebSocket connection once on mount
-    const ws = new WebSocket('wss://tok3wpajoh.execute-api.us-east-1.amazonaws.com/prod?x-api-key=1e84e4522ebec480c6280684355d05bc9137b2ad40553dfae3ab156c1c4ca531');
-    wsRef.current = ws;
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      ws.send(JSON.stringify({ action: 'init' }));
-    };
-    ws.onmessage = (event) => {
-      console.log('WebSocket message received:', event.data); // Catch-all log
-      try {
-        const data = JSON.parse(event.data);
-        if (data.connectionId && !connectionIdSet.current) {
-          setConnectionId(data.connectionId);
-          connectionIdSet.current = true;
-          console.log('Received connectionId:', data.connectionId);
-        } else if (data.jobStatus === 'completed') {
-          setUploading(false);
-          setWaitingForWS(false);
-          // Optionally, show a success message or update UI
-        }
-      } catch (e) {
-        console.log('Non-JSON WebSocket message:', event.data, e);
-      }
-    };
-    ws.onerror = (err) => {
-      console.error('WebSocket error:', err);
-    };
-    ws.onclose = () => {
-      console.log('WebSocket closed');
-      connectionIdSet.current = false;
-      setConnectionId(null);
-    };
-    return () => {
-      ws.close();
-    };
-  }, []);
-
   const handleUploadClick = () => {
     setIsDialogOpen(true);
     setSelectedFile(null);
   };
 
   const handleFileUpload = async (file: File) => {
-    if (!connectionId || !wsRef.current || wsRef.current.readyState !== 1) {
-      console.error('WebSocket not connected or connectionId not available');
-      return;
-    }
-    if (!file.name.endsWith('.blend')) {
-      console.error('Only .blend files are allowed');
-      return;
-    }
-    setIsDialogOpen(false);
     setUploading(true);
     setWaitingForWS(false);
+    connectionIdSet.current = false;
+    setConnectionId(null);
+
+    // Open WebSocket connection for this upload session
+    const ws = new WebSocket('wss://tok3wpajoh.execute-api.us-east-1.amazonaws.com/prod?x-api-key=1e84e4522ebec480c6280684355d05bc9137b2ad40553dfae3ab156c1c4ca531');
+    wsRef.current = ws;
     const modelId = file.name.replace(/\.blend$/, '');
     const apiKey = '1e84e4522ebec480c6280684355d05bc9137b2ad40553dfae3ab156c1c4ca531';
-    try {
-      // First call: GET presigned URL
-      const getUrl = `https://2imojbde0f.execute-api.us-east-1.amazonaws.com/v1/3d-model/${modelId}?getPresignedUploadURL=true&fileType=blend`;
-      const getResp = await fetch(getUrl, {
+
+    // Promise to wait for connectionId
+    let connectionIdPromiseResolve: (value: string) => void;
+    const connectionIdPromise = new Promise<string>(resolve => {
+      connectionIdPromiseResolve = resolve;
+    });
+
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      ws.send(JSON.stringify({ action: 'init' }));
+      // 6) 1st get call to get .blend presign url
+      fetch(`https://2imojbde0f.execute-api.us-east-1.amazonaws.com/v1/3d-model/${modelId}?getPresignedUploadURL=true&fileType=blend`, {
         method: 'GET',
         headers: { 'x-api-key': apiKey },
-      });
-      if (!getResp.ok) throw new Error('Failed to get presigned URL');
-      const { presignedUrl } = await getResp.json();
-      if (!presignedUrl) throw new Error('No presignedUrl in response');
-      // Second call: PUT file to presigned URL
-      const putResp = await fetch(presignedUrl, {
-        method: 'PUT',
-        body: file,
-        headers: {},
-      });
-      if (!putResp.ok) throw new Error('Failed to upload file to presigned URL');
-      // Third call: POST to API
-      const postUrl = `https://2imojbde0f.execute-api.us-east-1.amazonaws.com/v1/3d-model`;
-      const s3Key = `blend/${modelId}.blend`;
-      const postBody = {
-        connectionId,
-        fromFileType: 'blend',
-        toFileType: 'glb',
-        modelId,
-        s3Key,
-      };
-      const postResp = await fetch(postUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-        },
-        body: JSON.stringify(postBody),
-      });
-      if (!postResp.ok) throw new Error('Failed to POST to API');
-      // Wait for WebSocket message
-      setWaitingForWS(true);
-    } catch (err) {
+      })
+        .then(getResp => {
+          if (!getResp.ok) throw new Error('Failed to get presigned URL');
+          return getResp.json();
+        })
+        .then(({ presignedUrl }) => {
+          if (!presignedUrl) throw new Error('No presignedUrl in response');
+          // 7) put call to update the presign url with .blend file
+          return fetch(presignedUrl, {
+            method: 'PUT',
+            body: file,
+            headers: {},
+          });
+        })
+        .then(putResp => {
+          if (!putResp.ok) throw new Error('Failed to upload file to presigned URL');
+          // 8) Wait for connectionId before POST
+          return connectionIdPromise;
+        })
+        .then((connId) => {
+          const s3Key = `blend/${modelId}.blend`;
+          return fetch(`https://2imojbde0f.execute-api.us-east-1.amazonaws.com/v1/3d-model`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+            },
+            body: JSON.stringify({
+              connectionId: connId,
+              fromFileType: 'blend',
+              toFileType: 'glb',
+              modelId,
+              s3Key,
+            }),
+          });
+        })
+        .then(postResp => {
+          if (!postResp.ok) throw new Error('Failed to POST to API');
+          // 9) Websocket notifies client (handled in ws.onmessage)
+          setWaitingForWS(true);
+        })
+        .catch(err => {
+          setUploading(false);
+          setWaitingForWS(false);
+          console.error('Upload failed:', err);
+          if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+          }
+          connectionIdSet.current = false;
+          setConnectionId(null);
+        });
+    };
+    ws.onmessage = (event) => {
+      console.log('WebSocket message received:', event.data);
+      try {
+        const data = JSON.parse(event.data);
+        if (data.connectionId && !connectionIdSet.current) {
+          setConnectionId(data.connectionId);
+          connectionIdSet.current = true;
+          connectionIdPromiseResolve(data.connectionId); // <-- resolve the promise
+          console.log('Received connectionId:', data.connectionId);
+        } else if (data.jobStatus === 'completed') {
+          setUploading(false);
+          setWaitingForWS(false);
+          // 10) Client makes the second get call to get the .glb
+          if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+          }
+          connectionIdSet.current = false;
+          setConnectionId(null);
+          const modelId = data.modelId || (selectedFile ? selectedFile.name.replace(/\.blend$/, '') : '');
+          const getUrl = `https://2imojbde0f.execute-api.us-east-1.amazonaws.com/v1/3d-model/${modelId}?getPresignedUploadURL=false&fileType=glb`;
+          fetch(getUrl, {
+            method: 'GET',
+            headers: { 'x-api-key': apiKey },
+          })
+            .then(resp => resp.json())
+            .then(data => {
+              console.log('GET after job completion:', data);
+            })
+            .catch(err => {
+              console.error('Error in GET after job completion:', err);
+            });
+        }
+      } catch (e) {
+        console.log('Non-JSON WebSocket message:', event.data, e);
+        if (wsRef.current) {
+          wsRef.current.close();
+          wsRef.current = null;
+        }
+        connectionIdSet.current = false;
+        setConnectionId(null);
+      }
+    };
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err);
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      connectionIdSet.current = false;
+      setConnectionId(null);
       setUploading(false);
       setWaitingForWS(false);
-      console.error('Upload failed:', err);
-    }
+    };
+    ws.onclose = () => {
+      console.log('WebSocket closed');
+      connectionIdSet.current = false;
+      setConnectionId(null);
+    };
+    setIsDialogOpen(false);
   };
 
   return (
