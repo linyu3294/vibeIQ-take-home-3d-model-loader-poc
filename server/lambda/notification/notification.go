@@ -16,17 +16,16 @@ import (
 )
 
 type NotificationMessage struct {
-	Status       string `json:"status"`
+	ConnectionID string `json:"connectionId"`
+	JobType      string `json:"jobType"`
+	JobID        string `json:"jobId"`
+	JobStatus    string `json:"jobStatus"`
+	FromFileType string `json:"fromFileType"`
+	ToFileType   string `json:"toFileType"`
 	ModelID      string `json:"modelId"`
-	OutputS3Key  string `json:"outputS3Key,omitempty"`
-	Error        string `json:"error,omitempty"`
-	ConnectionID string `json:"connectionId,omitempty"`
-	JobType      string `json:"jobType,omitempty"`
-	JobID        string `json:"jobId,omitempty"`
-	JobStatus    string `json:"jobStatus,omitempty"`
-	FromFileType string `json:"fromFileType,omitempty"`
-	ToFileType   string `json:"toFileType,omitempty"`
-	NewS3Key     string `json:"newS3Key,omitempty"`
+	S3Key        string `json:"s3Key"`
+	NewS3Key     string `json:"newS3Key"`
+	Error        string `json:"error"`
 }
 
 func handler(ctx context.Context, sqsEvent events.SQSEvent) error {
