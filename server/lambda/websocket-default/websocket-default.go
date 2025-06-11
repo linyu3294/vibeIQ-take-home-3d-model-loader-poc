@@ -24,7 +24,7 @@ func sendConnectionIdToClient(ctx context.Context, endpoint, connectionId string
 	return err
 }
 
-func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
+func Handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	fmt.Printf("Received message: %s\n", req.Body)
 	fmt.Printf("Connection ID: %s\n", req.RequestContext.ConnectionID)
 
@@ -46,5 +46,5 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 }
 
 func main() {
-	lambda.Start(handler)
+	lambda.Start(Handler)
 }
