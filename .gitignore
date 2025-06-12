@@ -39,10 +39,11 @@ client/.env.*
 
 # TypeScript
 *.js.map
-*.d.ts
+# *.d.ts
 client/dist/
 client/node_modules/
 client/.vite/
 client/coverage/
 client/.DS_Store
+!client/src/vite-env.d.ts
 
