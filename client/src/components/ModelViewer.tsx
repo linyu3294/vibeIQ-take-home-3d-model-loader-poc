@@ -12,7 +12,8 @@ function ModelViewer() {
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
-  const apiKey = '1e84e4522ebec480c6280684355d05bc9137b2ad40553dfae3ab156c1c4ca531';
+  const apiKey = import.meta.env.VITE_API_KEY;
+  const apiUrl = import.meta.env.VITE_API_HTTPS_URL;
 
   useEffect(() => {
     if (!containerRef.current || !id) return;
@@ -55,10 +56,11 @@ function ModelViewer() {
     directionalLight.position.set(5, 10, 7.5);
     scene.add(directionalLight);
 
+
     // Load model
     const loadModel = async () => {
       try {
-        const response = await fetch(`https://2imojbde0f.execute-api.us-east-1.amazonaws.com/v1/3d-model/${id}?getPresignedUploadURL=false&fileType=glb`, {
+        const response = await fetch(`${apiUrl}/3d-model/${id}?getPresignedUploadURL=false&fileType=glb`, {
           headers: {
             'x-api-key': apiKey,
             'Content-Type': 'application/json'
@@ -123,6 +125,7 @@ function ModelViewer() {
       controls.update();
       renderer.render(scene, camera);
     };
+    
     animate();
 
     // Handle window resize

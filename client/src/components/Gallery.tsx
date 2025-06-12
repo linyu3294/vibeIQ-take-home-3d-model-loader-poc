@@ -33,13 +33,15 @@ function Gallery() {
   const wsRef = useRef<WebSocket | null>(null);
   const connectionIdSet = useRef(false);
   const limit = 12;
-  const apiKey = '1e84e4522ebec480c6280684355d05bc9137b2ad40553dfae3ab156c1c4ca531';
+  const apiUrl = import.meta.env.VITE_API_HTTPS_URL;
+  const webSocketUrl = import.meta.env.VITE_API_WEBSOCKET_URL;
+  const apiKey = import.meta.env.VITE_API_KEY;
 
   const fetchModels = async (cursorParam: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      let url = `https://2imojbde0f.execute-api.us-east-1.amazonaws.com/v1/3d-models?fileType=glb&limit=${limit}`;
+      let url = `${apiUrl}/3d-models?fileType=glb&limit=${limit}`;
       if (cursorParam) {
         const encodedCursor = encodeURIComponent(cursorParam);
         url += `&cursor=${encodedCursor}`;
@@ -100,11 +102,11 @@ function Gallery() {
     connectionIdSet.current = false;
     setConnectionId(null);
 
+
     // Open WebSocket connection for this upload session
-    const ws = new WebSocket('wss://tok3wpajoh.execute-api.us-east-1.amazonaws.com/prod?x-api-key=1e84e4522ebec480c6280684355d05bc9137b2ad40553dfae3ab156c1c4ca531');
+    const ws = new WebSocket(`${webSocketUrl}?x-api-key=${apiKey}`);
     wsRef.current = ws;
     const modelId = file.name.replace(/\.blend$/, '');
-    const apiKey = '1e84e4522ebec480c6280684355d05bc9137b2ad40553dfae3ab156c1c4ca531';
 
     // Promise to wait for connectionId
     let connectionIdPromiseResolve: (value: string) => void;
@@ -116,7 +118,7 @@ function Gallery() {
       console.log('WebSocket connected');
       ws.send(JSON.stringify({ action: 'init' }));
       // 6) 1st get call to get .blend presign url
-      fetch(`https://2imojbde0f.execute-api.us-east-1.amazonaws.com/v1/3d-model/${modelId}?getPresignedUploadURL=true&fileType=blend`, {
+      fetch(`${apiUrl}/3d-model/${modelId}?getPresignedUploadURL=true&fileType=blend`, {
         method: 'GET',
         headers: { 'x-api-key': apiKey },
       })
@@ -140,7 +142,7 @@ function Gallery() {
         })
         .then((connId) => {
           const s3Key = `blend/${modelId}.blend`;
-          return fetch(`https://2imojbde0f.execute-api.us-east-1.amazonaws.com/v1/3d-model`, {
+          return fetch(`${apiUrl}/3d-model`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -192,7 +194,7 @@ function Gallery() {
           connectionIdSet.current = false;
           setConnectionId(null);
           const modelId = data.modelId || (selectedFile ? selectedFile.name.replace(/\.blend$/, '') : '');
-          const getUrl = `https://2imojbde0f.execute-api.us-east-1.amazonaws.com/v1/3d-model/${modelId}?getPresignedUploadURL=false&fileType=glb`;
+          const getUrl = `${apiUrl}/3d-model/${modelId}?getPresignedUploadURL=false&fileType=glb`;
           fetch(getUrl, {
             method: 'GET',
             headers: { 'x-api-key': apiKey },
