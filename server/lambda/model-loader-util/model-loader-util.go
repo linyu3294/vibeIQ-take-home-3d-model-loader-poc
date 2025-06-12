@@ -307,6 +307,12 @@ func HandleGetModelRequest(ctx context.Context, request events.APIGatewayV2HTTPR
 	return createSuccessResponse(200, successResp), nil
 }
 
+/*
+###########################################
+GET /v1/3d-models?fileType{string}&limit={number}&cursor={string}
+###########################################
+*/
+
 func HandleGetModelsRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	apiKeyResp, err := helpers.ValidateHttpAPIKey(request)
 	if err != nil {

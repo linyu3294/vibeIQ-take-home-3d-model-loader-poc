@@ -1,13 +1,20 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import './App.css'
 
-// Mock data
-const models = [
-  { id: '1E1D33E1-76F1-455A-8E37-A82AC5D2568F', fileType: 'glb', imageUrl: 'https://images.unsplash.com/photo-1748854091034-abd9d3ea6be8?q=80&w=1374&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D' },
-  { id: '2F2E44F2-87G2-566B-9F48-B93BD6E3679G', fileType: 'glb', imageUrl: 'https://images.unsplash.com/photo-1748024093647-bbbfbe2c0c3f?q=80&w=1394&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D' },
-  { id: '3G3F55G3-98H3-677C-0G59-C04CE7F4780H', fileType: 'glb', imageUrl: 'https://images.unsplash.com/photo-1748682170760-aba4b59da534?q=80&w=1374&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D' },
-]
+type ModelMetadata = {
+  jobId: string;
+  connectionId: string;
+  jobType: string;
+  jobStatus: string;
+  fromFileType: string;
+  toFileType: string;
+  modelId: string;
+  s3Key: string;
+  newS3Key?: string;
+  error?: string;
+  timestamp: string;
+};
 
 function ModelCard({ id, fileType, imageUrl }: { id: string; fileType: string; imageUrl: string }) {
   return (
@@ -69,6 +76,13 @@ function UploadDialog({ isOpen, onClose, onUpload, uploading, selectedFile, setS
 }
 
 function Gallery() {
+  const [models, setModels] = useState<ModelMetadata[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [prevCursors, setPrevCursors] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [connectionId, setConnectionId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -76,6 +90,62 @@ function Gallery() {
   const [waitingForWS, setWaitingForWS] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const connectionIdSet = useRef(false);
+  const limit = 12;
+  const apiKey = '1e84e4522ebec480c6280684355d05bc9137b2ad40553dfae3ab156c1c4ca531';
+
+  const fetchModels = async (cursorParam: string | null) => {
+    setLoading(true);
+    setError(null);
+    try {
+      let url = `https://2imojbde0f.execute-api.us-east-1.amazonaws.com/v1/3d-models?fileType=glb&limit=${limit}`;
+      if (cursorParam) {
+        const encodedCursor = encodeURIComponent(cursorParam);
+        url += `&cursor=${encodedCursor}`;
+      }
+      console.log('Request URL:', url);
+      const resp = await fetch(url, {
+        headers: { 'x-api-key': apiKey }
+      });
+      if (!resp.ok) {
+        const errorData = await resp.json();
+        throw new Error(errorData.error || 'Failed to fetch models');
+      }
+      const data = await resp.json();
+      setModels(data.models || []);
+      setNextCursor(data.nextCursor || null);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Unknown error');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchModels(cursor);
+    // eslint-disable-next-line
+  }, [cursor]);
+
+  const handleNext = () => {
+    if (nextCursor) {
+      setPrevCursors(prev => [...prev, cursor || '']);
+      setCursor(nextCursor);
+      setPage(p => p + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (prevCursors.length > 0) {
+      const prev = [...prevCursors];
+      const prevCursor = prev.pop() || null;
+      setPrevCursors(prev);
+      setCursor(prevCursor);
+      setPage(p => p - 1);
+    }
+  };
 
   const handleUploadClick = () => {
     setIsDialogOpen(true);
@@ -230,17 +300,23 @@ function Gallery() {
           <div style={{ marginTop: 10, color: 'green' }}>Connection ID: {connectionId}</div>
         )}
       </div>
-      <BouncingProgressBar visible={uploading || waitingForWS} />
+      <BouncingProgressBar visible={loading || uploading || waitingForWS} />
       <UploadDialog isOpen={isDialogOpen} onClose={() => setIsDialogOpen(false)} onUpload={handleFileUpload} uploading={uploading || waitingForWS} selectedFile={selectedFile} setSelectedFile={setSelectedFile} />
+      {error && <div style={{ color: 'red' }}>{error}</div>}
       <div className="cards-grid">
         {models.map((model) => (
-          <ModelCard key={model.id} {...model} />
+          <ModelCard
+            key={model.jobId}
+            id={model.modelId}
+            fileType={model.toFileType}
+            imageUrl={'/placeholder-image.png'} // Replace with your actual image logic if available
+          />
         ))}
       </div>
       <div className="pagination">
-        <a href="#" className="pagination-link">&lt;&lt; Previous | </a>
-        <a href="#" className="pagination-link">Page 1</a>
-        <a href="#" className="pagination-link"> | Next &gt;&gt;</a>
+        <button className="pagination-link" onClick={handlePrev} disabled={page === 1 || loading}>&lt;&lt; Previous</button>
+        <span className="pagination-link">Page {page}</span>
+        <button className="pagination-link" onClick={handleNext} disabled={!nextCursor || loading}>Next &gt;&gt;</button>
       </div>
     </div>
   )
