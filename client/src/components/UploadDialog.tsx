@@ -12,6 +12,7 @@ function UploadDialog({ isOpen, onClose, onUpload, uploading, selectedFile, setS
       <div className="dialog">
         <button className="dialog-close" onClick={onClose}>×</button>
         <h2>Upload 3D Model</h2>
+        <p>Currently only .blend files are supported.</p>
         <div className="dialog-content">
           <input type="file" accept=".blend" onChange={e => setSelectedFile(e.target.files?.[0] || null)} />
           <button className="upload-button" onClick={() => selectedFile && onUpload(selectedFile)} disabled={!selectedFile || uploading}>
