@@ -43,8 +43,7 @@ function Gallery() {
     try {
       let url = `${apiUrl}/3d-models?fileType=glb&limit=${limit}`;
       if (cursorParam) {
-        const encodedCursor = encodeURIComponent(cursorParam);
-        url += `&cursor=${encodedCursor}`;
+        url += `&cursor=${encodeURIComponent(cursorParam)}`;
       }
       console.log('Request URL:', url);
       const resp = await fetch(url, {

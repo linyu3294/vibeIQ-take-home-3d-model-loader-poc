@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"slices"
 	"strconv"
@@ -346,8 +347,24 @@ func HandleGetModelsRequest(ctx context.Context, request events.APIGatewayV2HTTP
 	models := make([]ModelMetadata, 0, limit)
 	var lastEvaluatedKey map[string]types.AttributeValue
 	if cursor != "" {
-		if err := json.Unmarshal([]byte(cursor), &lastEvaluatedKey); err != nil {
+		// First decode the URL-encoded cursor
+		decodedCursor, err := url.QueryUnescape(cursor)
+		if err != nil {
+			return createErrorResponse(400, "Invalid URL-encoded cursor"), nil
+		}
+
+		// Parse into a temporary map
+		var tempMap map[string]interface{}
+		if err := json.Unmarshal([]byte(decodedCursor), &tempMap); err != nil {
 			return createErrorResponse(400, "Invalid cursor format"), nil
+		}
+
+		// Convert to DynamoDB AttributeValue format
+		lastEvaluatedKey = make(map[string]types.AttributeValue)
+		for k, v := range tempMap {
+			if strVal, ok := v.(string); ok {
+				lastEvaluatedKey[k] = &types.AttributeValueMemberS{Value: strVal}
+			}
 		}
 	}
 
@@ -412,7 +429,14 @@ func HandleGetModelsRequest(ctx context.Context, request events.APIGatewayV2HTTP
 		Models: models,
 	}
 	if lastEvaluatedKey != nil && len(models) == limit {
-		nextCursor, err := json.Marshal(lastEvaluatedKey)
+		// Convert DynamoDB AttributeValue to simple map for cursor
+		cursorMap := make(map[string]string)
+		for k, v := range lastEvaluatedKey {
+			if s, ok := v.(*types.AttributeValueMemberS); ok {
+				cursorMap[k] = s.Value
+			}
+		}
+		nextCursor, err := json.Marshal(cursorMap)
 		if err != nil {
 			return createErrorResponse(500, "Failed to generate next cursor"), err
 		}
