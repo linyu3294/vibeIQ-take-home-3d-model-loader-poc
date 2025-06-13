@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -14,9 +14,15 @@ function ModelViewer() {
   const controlsRef = useRef<OrbitControls | null>(null);
   const apiKey = import.meta.env.VITE_API_KEY;
   const apiUrl = import.meta.env.VITE_API_HTTPS_URL;
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!containerRef.current || !id) return;
+
+    // Set initial loading state
+    setIsLoading(true);
+    setLoadingProgress(0);
 
     // Set container to fill viewport
     containerRef.current.style.position = 'fixed';
@@ -70,9 +76,11 @@ function ModelViewer() {
         console.log('Received data:', data);
 
         const loader = new GLTFLoader();
+        console.log('Starting model load...');
         loader.load(
           data.presignedUrl,
           (gltf: GLTF) => {
+            console.log('Model loaded successfully');
             // Center the model
             const box = new THREE.Box3().setFromObject(gltf.scene);
             const center = box.getCenter(new THREE.Vector3());
@@ -104,16 +112,25 @@ function ModelViewer() {
             // Update controls target
             controls.target.set(0, 0, 0);
             controls.update();
+            
+            // Reset loading states when done
+            setLoadingProgress(0);
+            setIsLoading(false);
           },
           (progress: ProgressEvent) => {
-            console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+            const progressPercent = (progress.loaded / progress.total * 100);
+            console.log('Loading progress:', progressPercent + '%');
+            setLoadingProgress(progressPercent);
           },
           (error: unknown) => {
             console.error('Error loading model:', error);
+            setLoadingProgress(0);
+            setIsLoading(false);
           }
         );
       } catch (error) {
         console.error('Error fetching model URL:', error);
+        setIsLoading(false);
       }
     };
 
@@ -148,7 +165,54 @@ function ModelViewer() {
   }, [id]);
 
   return (
-    <div ref={containerRef} style={{ width: '100vw', height: '100vh', margin: 0, padding: 0, background: '#808080' }} />
+    <>
+      <div ref={containerRef} style={{ 
+        width: '100vw', 
+        height: '100vh', 
+        margin: 0, 
+        padding: 0, 
+        background: '#808080',
+        position: 'relative',
+        zIndex: 1
+      }} />
+      {(isLoading || loadingProgress > 0) && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: 'rgba(0, 0, 0, 0.8)',
+          padding: '20px',
+          borderRadius: '10px',
+          color: 'white',
+          fontFamily: 'Arial, sans-serif',
+          zIndex: 9999,
+          pointerEvents: 'none',
+          minWidth: '200px',
+          textAlign: 'center'
+        }}>
+          <div style={{ marginBottom: '10px' }}>
+            {loadingProgress > 0 
+              ? `Loading Model: ${Math.round(loadingProgress)}%`
+              : 'Preparing to load model...'}
+          </div>
+          <div style={{
+            width: '100%',
+            height: '10px',
+            background: '#444',
+            borderRadius: '5px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              width: `${loadingProgress}%`,
+              height: '100%',
+              background: '#4CAF50',
+              transition: 'width 0.3s ease-in-out'
+            }} />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
