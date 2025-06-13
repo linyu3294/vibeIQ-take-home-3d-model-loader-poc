@@ -113,67 +113,56 @@ function Gallery() {
       connectionIdPromiseResolve = resolve;
     });
 
-    ws.onopen = () => {
+    ws.onopen = async () => {
       console.log('WebSocket connected');
       ws.send(JSON.stringify({ action: 'init' }));
       // 6) 1st get call to get .blend presign url
-      fetch(`${apiUrl}/3d-model/${modelId}?getPresignedUploadURL=true&fileType=blend`, {
+      const response = await fetch(`${apiUrl}/3d-model/${modelId}?getPresignedUploadURL=true&fileType=blend`, {
         method: 'GET',
         headers: { 'x-api-key': apiKey },
-      })
-        .then(getResp => {
-          if (!getResp.ok) throw new Error('Failed to get presigned URL');
-          return getResp.json();
-        })
-        .then(({ presignedUrl }) => {
-          if (!presignedUrl) throw new Error('No presignedUrl in response');
-          // 7) put call to update the presign url with .blend file
-          return fetch(presignedUrl, {
-            method: 'PUT',
-            body: file,
-            headers: {},
-          });
-        })
-        .then(putResp => {
-          if (!putResp.ok) throw new Error('Failed to upload file to presigned URL');
-          // 8) Wait for connectionId before POST
-          return connectionIdPromise;
-        })
-        .then((connId) => {
-          const s3Key = `blend/${modelId}.blend`;
-          return fetch(`${apiUrl}/3d-model`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey,
-            },
-            body: JSON.stringify({
-              connectionId: connId,
-              fromFileType: 'blend',
-              toFileType: 'glb',
-              modelId,
-              s3Key,
-            }),
-          });
-        })
-        .then(postResp => {
-          if (!postResp.ok) throw new Error('Failed to POST to API');
-          // 9) Websocket notifies client (handled in ws.onmessage)
-          setWaitingForWS(true);
-        })
-        .catch(err => {
-          setUploading(false);
-          setWaitingForWS(false);
-          console.error('Upload failed:', err);
-          if (wsRef.current) {
-            wsRef.current.close();
-            wsRef.current = null;
-          }
-          connectionIdSet.current = false;
-          setConnectionId(null);
-        });
+      });
+      if (!response.ok) {
+        throw new Error('Failed to get presigned URL');
+      }
+      const { presignedUrl } = await response.json();
+      if (!presignedUrl) {
+        throw new Error('No presignedUrl in response');
+      }
+      // 7) put call to update the presign url with .blend file
+      const putResponse = await fetch(presignedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {},
+      });
+      if (!putResponse.ok) {
+        throw new Error('Failed to upload file to presigned URL');
+      }
+      // 8) Wait for connectionId before POST
+      await connectionIdPromise;
+      const connId = await connectionIdPromise;
+      const s3Key = `blend/${modelId}.blend`;
+      const postResponse = await fetch(`${apiUrl}/3d-model`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          connectionId: connId,
+          fromFileType: 'blend',
+          toFileType: 'glb',
+          modelId,
+          s3Key,
+        }),
+      });
+      if (!postResponse.ok) {
+        throw new Error('Failed to POST to API');
+      }
+      // 9) Websocket notifies client (handled in ws.onmessage)
+      setWaitingForWS(true);
     };
-    ws.onmessage = (event) => {
+
+    ws.onmessage = async (event: MessageEvent) => {
       console.log('WebSocket message received:', event.data);
       try {
         const data = JSON.parse(event.data);
